@@ -1,0 +1,72 @@
+# Docker Compose file for running Locust cluster locally
+# This sets up a master and 2 workers for testing
+
+version: '3.8'
+
+services:
+  locust-master:
+    build: .
+    image: locust-with-hooks:latest
+    container_name: locust-master
+    ports:
+      - "8089:8089"  # Web UI
+      - "5557:5557"  # Master communication port
+    environment:
+      - CONTROL_PLANE_URL=http://host.docker.internal:8080
+      - CONTROL_PLANE_TOKEN=your-secret-token-here
+      - RUN_ID=test-run-id
+      - TENANT_ID=tenant-1
+      - ENV_ID=dev
+      - METRICS_PUSH_INTERVAL=10
+    command: >
+      -f locustfile.py
+      --master
+      --web-host 0.0.0.0
+      --web-port 8089
+      --host http://target-app:8080
+    networks:
+      - locust-network
+
+  locust-worker-1:
+    build: .
+    image: locust-with-hooks:latest
+    container_name: locust-worker-1
+    environment:
+      - CONTROL_PLANE_URL=http://host.docker.internal:8080
+      - CONTROL_PLANE_TOKEN=your-secret-token-here
+      - RUN_ID=test-run-id
+      - TENANT_ID=tenant-1
+      - ENV_ID=dev
+    command: >
+      -f locustfile.py
+      --worker
+      --master-host locust-master
+      --master-port 5557
+    depends_on:
+      - locust-master
+    networks:
+      - locust-network
+
+  locust-worker-2:
+    build: .
+    image: locust-with-hooks:latest
+    container_name: locust-worker-2
+    environment:
+      - CONTROL_PLANE_URL=http://host.docker.internal:8080
+      - CONTROL_PLANE_TOKEN=your-secret-token-here
+      - RUN_ID=test-run-id
+      - TENANT_ID=tenant-1
+      - ENV_ID=dev
+    command: >
+      -f locustfile.py
+      --worker
+      --master-host locust-master
+      --master-port 5557
+    depends_on:
+      - locust-master
+    networks:
+      - locust-network
+
+networks:
+  locust-network:
+    driver: bridge

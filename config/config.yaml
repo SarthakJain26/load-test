@@ -1,0 +1,49 @@
+# Control Plane Configuration
+# This file defines how the control plane connects to Locust clusters and security settings
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+# Define Locust clusters mapped to tenant/environment combinations
+# Each cluster represents a Locust master endpoint
+locustClusters:
+  - id: "cluster-dev-tenant1"
+    baseUrl: "http://localhost:8089"
+    tenantId: "tenant-1"
+    envId: "dev"
+    authToken: ""  # Optional: if Locust master requires authentication
+  
+  - id: "cluster-staging-tenant1"
+    baseUrl: "http://locust-staging.internal:8089"
+    tenantId: "tenant-1"
+    envId: "staging"
+    authToken: ""
+  
+  - id: "cluster-prod-tenant1"
+    baseUrl: "http://locust-prod.internal:8089"
+    tenantId: "tenant-1"
+    envId: "production"
+    authToken: ""
+  
+  # Example: Different tenant
+  - id: "cluster-dev-tenant2"
+    baseUrl: "http://locust-tenant2-dev.internal:8089"
+    tenantId: "tenant-2"
+    envId: "dev"
+    authToken: ""
+
+# Security configuration
+security:
+  # Token that Locust uses to authenticate callbacks to control plane
+  # This should match the CONTROL_PLANE_TOKEN env var in Locust
+  locustCallbackToken: "your-secret-locust-token-here"
+  
+  # API token for user-facing endpoints (simple Bearer token auth)
+  # In production, replace with proper OAuth2/JWT
+  apiToken: "your-api-token-here"
+
+# Orchestrator behavior settings
+orchestrator:
+  # How often (in seconds) to poll Locust clusters for metrics
+  metricsPollIntervalSeconds: 10
