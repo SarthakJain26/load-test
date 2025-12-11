@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -42,17 +44,20 @@ func NewHTTPClient(baseURL, authToken string) *HTTPClient {
 func (c *HTTPClient) Swarm(ctx context.Context, users int, spawnRate float64) error {
 	endpoint := fmt.Sprintf("%s/swarm", c.baseURL)
 	
-	// Locust /swarm endpoint accepts form data or query params
-	params := url.Values{}
-	params.Set("user_count", strconv.Itoa(users))
-	params.Set("spawn_rate", fmt.Sprintf("%.2f", spawnRate))
+	log.Printf("[Locust Client] Starting swarm: users=%d, spawnRate=%.2f, endpoint=%s", users, spawnRate, endpoint)
 	
-	fullURL := fmt.Sprintf("%s?%s", endpoint, params.Encode())
+	// Locust /swarm endpoint expects form-encoded data
+	formData := url.Values{}
+	formData.Set("user_count", strconv.Itoa(users))
+	formData.Set("spawn_rate", fmt.Sprintf("%.2f", spawnRate))
 	
-	req, err := http.NewRequestWithContext(ctx, "POST", fullURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, strings.NewReader(formData.Encode()))
 	if err != nil {
 		return fmt.Errorf("failed to create swarm request: %w", err)
 	}
+	
+	// Set proper content type for form data
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	
 	if c.authToken != "" {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.authToken))
@@ -60,15 +65,19 @@ func (c *HTTPClient) Swarm(ctx context.Context, users int, spawnRate float64) er
 	
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		log.Printf("[Locust Client] Swarm request failed: %v", err)
 		return fmt.Errorf("failed to execute swarm request: %w", err)
 	}
 	defer resp.Body.Close()
 	
+	body, _ := io.ReadAll(resp.Body)
+	
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		log.Printf("[Locust Client] Swarm failed with status %d: %s", resp.StatusCode, string(body))
 		return fmt.Errorf("swarm request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 	
+	log.Printf("[Locust Client] Swarm successful. Response: %s", string(body))
 	return nil
 }
 
