@@ -125,15 +125,22 @@ func (c *HTTPClient) GetStats(ctx context.Context) (*domain.MetricSnapshot, erro
 		return nil, fmt.Errorf("stats request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 	
+	// Read body for both parsing and debugging
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
 	var statsResponse LocustStatsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&statsResponse); err != nil {
+	if err := json.Unmarshal(body, &statsResponse); err != nil {
 		return nil, fmt.Errorf("failed to decode stats response: %w", err)
 	}
-	
+
 	return convertToMetricSnapshot(&statsResponse), nil
 }
 
 // LocustStatsResponse represents the response from Locust /stats/requests endpoint
+// Note: Field names are based on Locust's actual API response format
 type LocustStatsResponse struct {
 	Stats []struct {
 		Method             string  `json:"method"`
@@ -145,12 +152,14 @@ type LocustStatsResponse struct {
 		MaxResponseTime    float64 `json:"max_response_time"`
 		MedianResponseTime float64 `json:"median_response_time"`
 		CurrentRps         float64 `json:"current_rps"`
+		CurrentFailPerSec  float64 `json:"current_fail_per_sec"`
 	} `json:"stats"`
-	TotalRps          float64 `json:"total_rps"`
-	FailRatio         float64 `json:"fail_ratio"`
-	CurrentUserCount  int     `json:"current_user_count"`
-	State             string  `json:"state"`
-	UserCount         int     `json:"user_count"`
+	// Top-level aggregated fields
+	TotalRps          float64 `json:"total_rps"`           // May also be "current_rps_total"
+	FailRatio         float64 `json:"fail_ratio"`          // Decimal 0-1, not percentage
+	CurrentUserCount  int     `json:"user_count"`          // Active users
+	State             string  `json:"state"`               // "running", "stopped", etc.
+	TotalAvgResponseTime float64 `json:"total_avg_response_time"` // Average across all requests
 }
 
 // convertToMetricSnapshot converts Locust stats response to our domain MetricSnapshot
@@ -162,28 +171,40 @@ func convertToMetricSnapshot(stats *LocustStatsResponse) *domain.MetricSnapshot 
 		CurrentUsers:  stats.CurrentUserCount,
 		RequestStats:  make(map[string]*domain.ReqStat),
 	}
-	
+
 	var totalRequests, totalFailures int64
 	var sumAvgResponseTime float64
 	var p50 float64
-	
+	var numValidStats int
+
 	// Aggregate stats from individual endpoints
 	for _, stat := range stats.Stats {
-		// Skip the "Aggregated" entry if present
+		// Skip the "Aggregated" or "Total" entry if present
 		if stat.Name == "Aggregated" || stat.Name == "Total" {
+			// But use it for aggregate metrics if available
+			if stat.NumRequests > 0 {
+				snapshot.TotalRequests = stat.NumRequests
+				snapshot.TotalFailures = stat.NumFailures
+				snapshot.AverageResponseMs = stat.AvgResponseTime
+				snapshot.P50ResponseMs = stat.MedianResponseTime
+			}
 			continue
 		}
-		
+
+		// Accumulate for our own aggregation (fallback if no Aggregated entry)
 		totalRequests += stat.NumRequests
 		totalFailures += stat.NumFailures
-		sumAvgResponseTime += stat.AvgResponseTime
-		
-		// Use median as approximation for percentiles
-		// In a real implementation, we'd need more detailed percentile data from Locust
-		if stat.MedianResponseTime > p50 {
-			p50 = stat.MedianResponseTime
+
+		if stat.NumRequests > 0 {
+			sumAvgResponseTime += stat.AvgResponseTime
+			numValidStats++
+
+			// Track highest median for percentile approximation
+			if stat.MedianResponseTime > p50 {
+				p50 = stat.MedianResponseTime
+			}
 		}
-		
+
 		// Store per-request stats
 		key := fmt.Sprintf("%s_%s", stat.Method, stat.Name)
 		snapshot.RequestStats[key] = &domain.ReqStat{
@@ -198,19 +219,31 @@ func convertToMetricSnapshot(stats *LocustStatsResponse) *domain.MetricSnapshot 
 			RequestsPerSec:     stat.CurrentRps,
 		}
 	}
-	
-	snapshot.TotalRequests = totalRequests
-	snapshot.TotalFailures = totalFailures
-	
-	if len(stats.Stats) > 0 {
-		snapshot.AverageResponseMs = sumAvgResponseTime / float64(len(stats.Stats))
+
+	// Use our aggregation if we didn't get it from the "Aggregated" entry
+	if snapshot.TotalRequests == 0 {
+		snapshot.TotalRequests = totalRequests
+		snapshot.TotalFailures = totalFailures
 	}
-	
-	// For now, use median as approximation for percentiles
-	// Locust's detailed percentile data would need custom parsing
-	snapshot.P50ResponseMs = p50
-	snapshot.P95ResponseMs = p50 * 1.5 // Rough approximation
-	snapshot.P99ResponseMs = p50 * 2.0 // Rough approximation
+
+	if snapshot.AverageResponseMs == 0 && numValidStats > 0 {
+		snapshot.AverageResponseMs = sumAvgResponseTime / float64(numValidStats)
+	}
+
+	if snapshot.P50ResponseMs == 0 {
+		snapshot.P50ResponseMs = p50
+	}
+
+	// Approximations for P95 and P99 if not provided
+	if snapshot.P50ResponseMs > 0 {
+		snapshot.P95ResponseMs = snapshot.P50ResponseMs * 1.5
+		snapshot.P99ResponseMs = snapshot.P50ResponseMs * 2.0
+	}
+
+	// Use TotalAvgResponseTime if available
+	if stats.TotalAvgResponseTime > 0 {
+		snapshot.AverageResponseMs = stats.TotalAvgResponseTime
+	}
 	
 	return snapshot
 }

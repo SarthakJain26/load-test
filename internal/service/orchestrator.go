@@ -286,6 +286,10 @@ func (o *Orchestrator) pollMetrics() {
 			continue
 		}
 		
+		// Log metrics summary for debugging
+		log.Printf("Polled metrics for run %s: RPS=%.2f, Requests=%d, Failures=%d, Users=%d",
+			run.ID, metrics.TotalRPS, metrics.TotalRequests, metrics.TotalFailures, metrics.CurrentUsers)
+		
 		// Update metrics
 		if err := o.UpdateMetrics(run.ID, metrics); err != nil {
 			log.Printf("Error updating metrics for run %s: %v", run.ID, err)
