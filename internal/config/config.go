@@ -15,6 +15,7 @@ type Config struct {
 	LocustClusters []ClusterConfig      `yaml:"locustClusters" json:"locustClusters"`
 	Security       SecurityConfig       `yaml:"security" json:"security"`
 	Orchestrator   OrchestratorConfig   `yaml:"orchestrator" json:"orchestrator"`
+	MongoDB        MongoDBConfig        `yaml:"mongodb" json:"mongodb"`
 }
 
 // ServerConfig holds HTTP server configuration
@@ -44,6 +45,14 @@ type SecurityConfig struct {
 type OrchestratorConfig struct {
 	// Interval in seconds to poll Locust for metrics
 	MetricsPollIntervalSeconds int `yaml:"metricsPollIntervalSeconds" json:"metricsPollIntervalSeconds"`
+}
+
+// MongoDBConfig holds MongoDB connection configuration
+type MongoDBConfig struct {
+	URI                   string `yaml:"uri" json:"uri"`
+	Database              string `yaml:"database" json:"database"`
+	ConnectTimeoutSeconds int    `yaml:"connectTimeoutSeconds" json:"connectTimeoutSeconds"`
+	MaxPoolSize           int    `yaml:"maxPoolSize" json:"maxPoolSize"`
 }
 
 // LoadFromFile loads configuration from a YAML or JSON file

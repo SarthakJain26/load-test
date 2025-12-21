@@ -61,6 +61,9 @@ type MetricSnapshot struct {
 	TotalFailures     int64              `json:"totalFailures"`
 	ErrorRate         float64            `json:"errorRate"` // Percentage
 	AverageResponseMs float64            `json:"avgResponseMs"`
+	MinResponseMs     float64            `json:"minResponseMs"`
+	MaxResponseMs     float64            `json:"maxResponseMs"`
+	AvgResponseMs     float64            `json:"avgResponseMs"` // Alias for AverageResponseMs
 	P50ResponseMs     float64            `json:"p50ResponseMs"`
 	P95ResponseMs     float64            `json:"p95ResponseMs"`
 	P99ResponseMs     float64            `json:"p99ResponseMs"`
@@ -70,13 +73,18 @@ type MetricSnapshot struct {
 
 // ReqStat represents statistics for a specific request/endpoint
 type ReqStat struct {
-	Method           string  `json:"method"`
-	Name             string  `json:"name"`
-	NumRequests      int64   `json:"numRequests"`
-	NumFailures      int64   `json:"numFailures"`
-	AvgResponseTime  float64 `json:"avgResponseTime"`
-	MinResponseTime  float64 `json:"minResponseTime"`
-	MaxResponseTime  float64 `json:"maxResponseTime"`
+	Method             string  `json:"method"`
+	Name               string  `json:"name"`
+	NumRequests        int64   `json:"numRequests"`
+	NumFailures        int64   `json:"numFailures"`
+	AvgResponseTime    float64 `json:"avgResponseTime"`
+	AvgResponseTimeMs  float64 `json:"avgResponseTimeMs"` // In milliseconds
+	MinResponseTime    float64 `json:"minResponseTime"`
+	MinResponseTimeMs  float64 `json:"minResponseTimeMs"` // In milliseconds
+	MaxResponseTime    float64 `json:"maxResponseTime"`
+	MaxResponseTimeMs  float64 `json:"maxResponseTimeMs"` // In milliseconds
 	MedianResponseTime float64 `json:"medianResponseTime"`
-	RequestsPerSec   float64 `json:"requestsPerSec"`
+	P50ResponseMs      float64 `json:"p50ResponseMs"` // 50th percentile
+	P95ResponseMs      float64 `json:"p95ResponseMs"` // 95th percentile
+	RequestsPerSec     float64 `json:"requestsPerSec"`
 }

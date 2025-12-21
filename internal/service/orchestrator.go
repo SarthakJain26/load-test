@@ -18,6 +18,7 @@ import (
 type Orchestrator struct {
 	config       *config.Config
 	store        store.TestRunRepository
+	metricsStore *store.MongoMetricsStore
 	clients      map[string]locustclient.Client // Map of clusterID -> client
 	mu           sync.RWMutex
 	ctx          context.Context
@@ -26,12 +27,13 @@ type Orchestrator struct {
 }
 
 // NewOrchestrator creates a new orchestrator instance
-func NewOrchestrator(cfg *config.Config, store store.TestRunRepository) *Orchestrator {
+func NewOrchestrator(cfg *config.Config, store store.TestRunRepository, metricsStore *store.MongoMetricsStore) *Orchestrator {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	o := &Orchestrator{
 		config:       cfg,
 		store:        store,
+		metricsStore: metricsStore,
 		clients:      make(map[string]locustclient.Client),
 		ctx:          ctx,
 		cancel:       cancel,
@@ -346,6 +348,15 @@ func (o *Orchestrator) pollMetrics() {
 		// Log metrics summary for debugging
 		log.Printf("Polled metrics for run %s: RPS=%.2f, Requests=%d, Failures=%d, Users=%d",
 			run.ID, metrics.TotalRPS, metrics.TotalRequests, metrics.TotalFailures, metrics.CurrentUsers)
+
+		// Store metrics in time-series collection
+		if o.metricsStore != nil {
+			storeCtx, storeCancel := context.WithTimeout(o.ctx, 5*time.Second)
+			if err := o.metricsStore.StoreMetric(storeCtx, run.ID, run.TenantID, run.EnvID, metrics); err != nil {
+				log.Printf("Error storing metrics in time-series for run %s: %v", run.ID, err)
+			}
+			storeCancel()
+		}
 
 		// Update metrics
 		if err := o.UpdateMetrics(run.ID, metrics); err != nil {

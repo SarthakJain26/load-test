@@ -3,6 +3,7 @@ package main
 import (
 	"Load-manager-cli/internal/api"
 	"Load-manager-cli/internal/config"
+	"Load-manager-cli/internal/mongodb"
 	"Load-manager-cli/internal/service"
 	"Load-manager-cli/internal/store"
 	"context"
@@ -34,20 +35,48 @@ func main() {
 	log.Printf("Server will listen on %s:%d", cfg.Server.Host, cfg.Server.Port)
 	log.Printf("Configured %d Locust cluster(s)", len(cfg.LocustClusters))
 
-	// Initialize store
-	testRunStore := store.NewInMemoryTestRunStore()
-	log.Println("In-memory store initialized")
+	// Initialize MongoDB
+	log.Println("Connecting to MongoDB...")
+	mongoClient, err := mongodb.NewClient(mongodb.Config{
+		URI:            cfg.MongoDB.URI,
+		Database:       cfg.MongoDB.Database,
+		ConnectTimeout: time.Duration(cfg.MongoDB.ConnectTimeoutSeconds) * time.Second,
+		MaxPoolSize:    uint64(cfg.MongoDB.MaxPoolSize),
+	})
+	if err != nil {
+		log.Fatalf("Failed to connect to MongoDB: %v", err)
+	}
+	defer func() {
+		if err := mongoClient.Close(context.Background()); err != nil {
+			log.Printf("Error closing MongoDB connection: %v", err)
+		}
+	}()
+	log.Println("Connected to MongoDB successfully")
+
+	// Initialize MongoDB stores
+	testRunStore, err := store.NewMongoTestRunStore(mongoClient.Database())
+	if err != nil {
+		log.Fatalf("Failed to initialize test run store: %v", err)
+	}
+	log.Println("Test run store initialized with indexes")
+
+	metricsStore, err := store.NewMongoMetricsStore(mongoClient.Database())
+	if err != nil {
+		log.Fatalf("Failed to initialize metrics store: %v", err)
+	}
+	log.Println("Metrics time-series store initialized with indexes")
 
 	// Initialize orchestrator
-	orchestrator := service.NewOrchestrator(cfg, testRunStore)
+	orchestrator := service.NewOrchestrator(cfg, testRunStore, metricsStore)
 	orchestrator.Start()
 	log.Println("Orchestrator started")
 
-	// Initialize API handler
+	// Initialize API handlers
 	handler := api.NewHandler(orchestrator, cfg)
+	visualizationHandler := api.NewVisualizationHandler(testRunStore, metricsStore)
 
 	// Setup router
-	router := setupRouter(handler)
+	router := setupRouter(handler, visualizationHandler)
 
 	// Create HTTP server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
@@ -93,7 +122,7 @@ func main() {
 }
 
 // setupRouter configures all API routes
-func setupRouter(handler *api.Handler) *mux.Router {
+func setupRouter(handler *api.Handler, visualizationHandler *api.VisualizationHandler) *mux.Router {
 	router := mux.NewRouter()
 
 	// Apply auth middleware to all routes
@@ -110,6 +139,11 @@ func setupRouter(handler *api.Handler) *mux.Router {
 	v1.HandleFunc("/tests", handler.ListTests).Methods("GET")
 	v1.HandleFunc("/tests/{id}", handler.GetTest).Methods("GET")
 	v1.HandleFunc("/tests/{id}/stop", handler.StopTest).Methods("POST")
+
+	// Visualization endpoints for charts and metrics
+	v1.HandleFunc("/tests/{id}/metrics/timeseries", visualizationHandler.GetTimeseriesChart).Methods("GET")
+	v1.HandleFunc("/tests/{id}/metrics/scatter", visualizationHandler.GetScatterPlot).Methods("GET")
+	v1.HandleFunc("/tests/{id}/metrics/aggregate", visualizationHandler.GetAggregatedStats).Methods("GET")
 
 	// Internal Locust callback endpoints
 	internal := v1.PathPrefix("/internal/locust").Subrouter()

@@ -47,3 +47,17 @@ security:
 orchestrator:
   # How often (in seconds) to poll Locust clusters for metrics
   metricsPollIntervalSeconds: 10
+
+# MongoDB configuration for persistent storage and time-series metrics
+mongodb:
+  # MongoDB connection URI
+  uri: "mongodb://localhost:27017"
+  
+  # Database name
+  database: "load_testing"
+  
+  # Connection timeout in seconds
+  connectTimeoutSeconds: 10
+  
+  # Maximum connection pool size
+  maxPoolSize: 100
