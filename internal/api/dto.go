@@ -79,6 +79,21 @@ type LocustCallbackMetricsRequest struct {
 	Metrics *MetricSnapshotResponse `json:"metrics" binding:"required"`
 }
 
+// RegisterExternalTestRequest is used when a test is started directly from Locust UI
+type RegisterExternalTestRequest struct {
+	TenantID    string  `json:"tenantId" binding:"required"`
+	EnvID       string  `json:"envId" binding:"required"`
+	ScenarioID  string  `json:"scenarioId"`
+	TargetUsers int     `json:"targetUsers"`
+	SpawnRate   float64 `json:"spawnRate"`
+}
+
+// RegisterExternalTestResponse returns the assigned run ID
+type RegisterExternalTestResponse struct {
+	RunID   string `json:"runId"`
+	Message string `json:"message"`
+}
+
 // ErrorResponse represents an error response
 type ErrorResponse struct {
 	Error   string `json:"error"`

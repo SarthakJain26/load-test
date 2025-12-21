@@ -128,6 +128,51 @@ func (o *Orchestrator) CreateTestRun(req *CreateTestRunRequest) (*domain.TestRun
 	return run, nil
 }
 
+// RegisterExternalTestRun registers a test that was started externally (e.g., from Locust UI)
+// This allows the control plane to track and poll metrics for UI-started tests
+func (o *Orchestrator) RegisterExternalTestRun(req *RegisterExternalTestRunRequest) (*domain.TestRun, error) {
+	log.Printf("[Orchestrator] Registering external test run: tenant=%s, env=%s, users=%d",
+		req.TenantID, req.EnvID, req.TargetUsers)
+	
+	// Validate tenant and environment
+	cluster, err := o.config.GetLocustCluster(req.TenantID, req.EnvID)
+	if err != nil {
+		log.Printf("[Orchestrator] Failed to resolve cluster for external test: %v", err)
+		return nil, fmt.Errorf("failed to resolve cluster: %w", err)
+	}
+	
+	log.Printf("[Orchestrator] Resolved cluster for external test: id=%s, url=%s", cluster.ID, cluster.BaseURL)
+	
+	// Create test run entity (already running since it was started externally)
+	now := time.Now()
+	run := &domain.TestRun{
+		ID:              uuid.New().String(),
+		TenantID:        req.TenantID,
+		EnvID:           req.EnvID,
+		LocustClusterID: cluster.ID,
+		ScenarioID:      req.ScenarioID,
+		TargetUsers:     req.TargetUsers,
+		SpawnRate:       req.SpawnRate,
+		DurationSeconds: req.DurationSeconds,
+		Status:          domain.TestRunStatusRunning,
+		StartedAt:       &now,
+		Metadata: map[string]any{
+			"source": "locust-ui",
+			"registeredAt": now.Format("2006-01-02T15:04:05Z07:00"),
+		},
+	}
+	
+	// Store the test run
+	if err := o.store.Create(run); err != nil {
+		log.Printf("[Orchestrator] Failed to store external test run: %v", err)
+		return nil, fmt.Errorf("failed to store test run: %w", err)
+	}
+	
+	log.Printf("[Orchestrator] Registered external test run %s from Locust UI on cluster %s",
+		run.ID, cluster.ID)
+	return run, nil
+}
+
 // StopTestRun stops a running load test
 func (o *Orchestrator) StopTestRun(runID string) error {
 	run, err := o.store.Get(runID)
@@ -331,4 +376,14 @@ type CreateTestRunRequest struct {
 	SpawnRate       float64        `json:"spawnRate"`
 	DurationSeconds *int           `json:"durationSeconds,omitempty"`
 	Metadata        map[string]any `json:"metadata,omitempty"`
+}
+
+// RegisterExternalTestRunRequest represents a request to register an externally-started test
+type RegisterExternalTestRunRequest struct {
+	TenantID        string
+	EnvID           string
+	ScenarioID      string
+	TargetUsers     int
+	SpawnRate       float64
+	DurationSeconds *int
 }

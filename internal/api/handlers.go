@@ -205,6 +205,46 @@ func (h *Handler) LocustCallbackMetrics(w http.ResponseWriter, r *http.Request) 
 	respondJSON(w, http.StatusOK, SuccessResponse{Success: true})
 }
 
+// RegisterExternalTest handles POST /v1/internal/locust/register-external
+// Called by Locust when a test is started from the UI (not via API)
+func (h *Handler) RegisterExternalTest(w http.ResponseWriter, r *http.Request) {
+	var req RegisterExternalTestRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+	
+	if req.TenantID == "" || req.EnvID == "" {
+		respondError(w, http.StatusBadRequest, "tenantId and envId are required", nil)
+		return
+	}
+	
+	// Default scenario ID if not provided
+	if req.ScenarioID == "" {
+		req.ScenarioID = "ui-started-test"
+	}
+	
+	orchestratorReq := &service.RegisterExternalTestRunRequest{
+		TenantID:    req.TenantID,
+		EnvID:       req.EnvID,
+		ScenarioID:  req.ScenarioID,
+		TargetUsers: req.TargetUsers,
+		SpawnRate:   req.SpawnRate,
+	}
+	
+	run, err := h.orchestrator.RegisterExternalTestRun(orchestratorReq)
+	if err != nil {
+		log.Printf("Error registering external test: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to register external test", err)
+		return
+	}
+	
+	respondJSON(w, http.StatusOK, RegisterExternalTestResponse{
+		RunID:   run.ID,
+		Message: "External test registered successfully",
+	})
+}
+
 // Health check endpoint
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]string{
