@@ -17,23 +17,25 @@ const (
 
 // MetricsDocument represents a time-series metrics document
 type MetricsDocument struct {
-	Timestamp     time.Time              `bson:"timestamp"`
-	TestRunID     string                 `bson:"testRunId"`
-	TenantID      string                 `bson:"tenantId"`
-	EnvID         string                 `bson:"envId"`
-	TotalRPS      float64                `bson:"totalRps"`
-	TotalRequests int64                  `bson:"totalRequests"`
-	TotalFailures int64                  `bson:"totalFailures"`
-	ErrorRate     float64                `bson:"errorRate"`
-	CurrentUsers  int                    `bson:"currentUsers"`
-	P50ResponseMs float64                `bson:"p50ResponseMs"`
-	P95ResponseMs float64                `bson:"p95ResponseMs"`
-	P99ResponseMs float64                `bson:"p99ResponseMs"`
-	MinResponseMs float64                `bson:"minResponseMs"`
-	MaxResponseMs float64                `bson:"maxResponseMs"`
-	AvgResponseMs float64                `bson:"avgResponseMs"`
-	RequestStats  []RequestStatDocument  `bson:"requestStats"`
-	Metadata      map[string]interface{} `bson:"metadata,omitempty"`
+	Timestamp       int64                  `bson:"timestamp"` // Unix milliseconds
+	LoadTestRunID   string                 `bson:"loadTestRunId"`
+	AccountID       string                 `bson:"accountId"`
+	OrgID           string                 `bson:"orgId"`
+	ProjectID       string                 `bson:"projectId"`
+	EnvID           string                 `bson:"envId,omitempty"`
+	TotalRPS        float64                `bson:"totalRps"`
+	TotalRequests   int64                  `bson:"totalRequests"`
+	TotalFailures   int64                  `bson:"totalFailures"`
+	ErrorRate       float64                `bson:"errorRate"`
+	CurrentUsers    int                    `bson:"currentUsers"`
+	P50ResponseMs   float64                `bson:"p50ResponseMs"`
+	P95ResponseMs   float64                `bson:"p95ResponseMs"`
+	P99ResponseMs   float64                `bson:"p99ResponseMs"`
+	MinResponseMs   float64                `bson:"minResponseMs"`
+	MaxResponseMs   float64                `bson:"maxResponseMs"`
+	AvgResponseMs   float64                `bson:"avgResponseMs"`
+	RequestStats    []RequestStatDocument  `bson:"requestStats"`
+	Metadata        map[string]interface{} `bson:"metadata,omitempty"`
 }
 
 // RequestStatDocument represents per-endpoint stats
@@ -109,24 +111,25 @@ func (s *MongoMetricsStore) createIndexes() error {
 	indexes := []mongo.IndexModel{
 		{
 			Keys: bson.D{
-				{Key: "testRunId", Value: 1},
+				{Key: "loadTestRunId", Value: 1},
 				{Key: "timestamp", Value: 1},
 			},
-			Options: options.Index().SetName("testrun_timestamp_idx"),
+			Options: options.Index().SetName("loadtestrun_timestamp_idx"),
 		},
 		{
 			Keys: bson.D{
-				{Key: "tenantId", Value: 1},
-				{Key: "envId", Value: 1},
+				{Key: "accountId", Value: 1},
+				{Key: "orgId", Value: 1},
+				{Key: "projectId", Value: 1},
 				{Key: "timestamp", Value: -1},
 			},
-			Options: options.Index().SetName("tenant_env_timestamp_idx"),
+			Options: options.Index().SetName("account_org_project_timestamp_idx"),
 		},
 		{
 			Keys: bson.D{
-				{Key: "testRunId", Value: 1},
+				{Key: "loadTestRunId", Value: 1},
 			},
-			Options: options.Index().SetName("testrun_idx"),
+			Options: options.Index().SetName("loadtestrun_idx"),
 		},
 	}
 
@@ -139,11 +142,13 @@ func (s *MongoMetricsStore) createIndexes() error {
 }
 
 // StoreMetric stores a metric snapshot
-func (s *MongoMetricsStore) StoreMetric(ctx context.Context, testRunID, tenantID, envID string, metric *domain.MetricSnapshot) error {
+func (s *MongoMetricsStore) StoreMetric(ctx context.Context, loadTestRunID, accountID, orgID, projectID, envID string, metric *domain.MetricSnapshot) error {
 	doc := MetricsDocument{
-		Timestamp:     time.Now(),
-		TestRunID:     testRunID,
-		TenantID:      tenantID,
+		Timestamp:     metric.Timestamp, // Already int64 Unix milliseconds
+		LoadTestRunID: loadTestRunID,
+		AccountID:     accountID,
+		OrgID:         orgID,
+		ProjectID:     projectID,
 		EnvID:         envID,
 		TotalRPS:      metric.TotalRPS,
 		TotalRequests: metric.TotalRequests,
@@ -156,21 +161,23 @@ func (s *MongoMetricsStore) StoreMetric(ctx context.Context, testRunID, tenantID
 		MinResponseMs: metric.MinResponseMs,
 		MaxResponseMs: metric.MaxResponseMs,
 		AvgResponseMs: metric.AvgResponseMs,
-		RequestStats:  make([]RequestStatDocument, len(metric.RequestStats)),
+		RequestStats:  make([]RequestStatDocument, 0, len(metric.RequestStats)),
 	}
 
-	for i, stat := range metric.RequestStats {
-		doc.RequestStats[i] = RequestStatDocument{
-			Method:            stat.Method,
-			Name:              stat.Name,
-			NumRequests:       stat.NumRequests,
-			NumFailures:       stat.NumFailures,
-			AvgResponseTimeMs: stat.AvgResponseTimeMs,
-			MinResponseTimeMs: stat.MinResponseTimeMs,
-			MaxResponseTimeMs: stat.MaxResponseTimeMs,
-			P50ResponseMs:     stat.P50ResponseMs,
-			P95ResponseMs:     stat.P95ResponseMs,
-			RequestsPerSec:    stat.RequestsPerSec,
+	for _, stat := range metric.RequestStats {
+		if stat != nil {
+			doc.RequestStats = append(doc.RequestStats, RequestStatDocument{
+				Method:            stat.Method,
+				Name:              stat.Name,
+				NumRequests:       stat.NumRequests,
+				NumFailures:       stat.NumFailures,
+				AvgResponseTimeMs: stat.AvgResponseTimeMs,
+				MinResponseTimeMs: stat.MinResponseTimeMs,
+				MaxResponseTimeMs: stat.MaxResponseTimeMs,
+				P50ResponseMs:     stat.P50ResponseMs,
+				P95ResponseMs:     stat.P95ResponseMs,
+				RequestsPerSec:    stat.RequestsPerSec,
+			})
 		}
 	}
 
@@ -183,17 +190,17 @@ func (s *MongoMetricsStore) StoreMetric(ctx context.Context, testRunID, tenantID
 }
 
 // GetMetricsTimeseries retrieves time-series data for charts
-func (s *MongoMetricsStore) GetMetricsTimeseries(ctx context.Context, testRunID string, fromTime, toTime time.Time) ([]MetricsDocument, error) {
+func (s *MongoMetricsStore) GetMetricsTimeseries(ctx context.Context, loadTestRunID string, fromTime, toTime int64) ([]MetricsDocument, error) {
 	filter := bson.M{
-		"testRunId": testRunID,
+		"loadTestRunId": loadTestRunID,
 	}
 
-	if !fromTime.IsZero() || !toTime.IsZero() {
+	if fromTime > 0 || toTime > 0 {
 		timeFilter := bson.M{}
-		if !fromTime.IsZero() {
+		if fromTime > 0 {
 			timeFilter["$gte"] = fromTime
 		}
-		if !toTime.IsZero() {
+		if toTime > 0 {
 			timeFilter["$lte"] = toTime
 		}
 		filter["timestamp"] = timeFilter
@@ -216,9 +223,9 @@ func (s *MongoMetricsStore) GetMetricsTimeseries(ctx context.Context, testRunID 
 }
 
 // GetAggregatedMetrics retrieves aggregated metrics for a test run
-func (s *MongoMetricsStore) GetAggregatedMetrics(ctx context.Context, testRunID string) (*AggregatedMetrics, error) {
+func (s *MongoMetricsStore) GetAggregatedMetrics(ctx context.Context, loadTestRunID string) (*AggregatedMetrics, error) {
 	pipeline := mongo.Pipeline{
-		{{Key: "$match", Value: bson.M{"testRunId": testRunID}}},
+		{{Key: "$match", Value: bson.M{"loadTestRunId": loadTestRunID}}},
 		{{Key: "$group", Value: bson.M{
 			"_id":           nil,
 			"avgRPS":        bson.M{"$avg": "$totalRps"},

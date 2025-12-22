@@ -77,3 +77,57 @@ type VisualizationSummaryResponse struct {
 	EndpointStats []EndpointStatsResponse `json:"endpointStats"`
 	Summary       AggregatedSummary       `json:"summary"`
 }
+
+// GraphDataPoint represents minimal data for plotting the main graph
+type GraphDataPoint struct {
+	Timestamp        int64   `json:"timestamp"`        // Unix milliseconds
+	Users            int     `json:"users"`            // Current active users
+	RequestsPerSec   float64 `json:"requestsPerSec"`   // RPS
+	ErrorsPerSec     float64 `json:"errorsPerSec"`     // Errors per second
+	AvgResponseTime  float64 `json:"avgResponseTime"`  // Average response time in seconds
+}
+
+// RunGraphResponse returns minimal graph data for plotting
+type RunGraphResponse struct {
+	RunID      string            `json:"runId"`
+	RunName    string            `json:"runName"`
+	Status     string            `json:"status"`
+	StartedAt  string            `json:"startedAt"`
+	DataPoints []GraphDataPoint  `json:"dataPoints"`
+}
+
+// RunSummaryResponse returns the 4 key metrics for the summary cards
+type RunSummaryResponse struct {
+	RunID           string  `json:"runId"`
+	RunName         string  `json:"runName"`
+	Status          string  `json:"status"`
+	StartedAt       string  `json:"startedAt"`
+	FinishedAt      string  `json:"finishedAt,omitempty"`
+	Duration        string  `json:"duration"`
+	TotalRequests   int64   `json:"totalRequests"`
+	RequestsPerSec  float64 `json:"requestsPerSec"`
+	ErrorRate       float64 `json:"errorRate"`        // Percentage
+	AvgResponseTime float64 `json:"avgResponseTime"` // In seconds
+	// Test configuration
+	TargetUsers     int     `json:"targetUsers"`
+	SpawnRate       float64 `json:"spawnRate"`
+	DurationSeconds *int    `json:"durationSeconds,omitempty"`
+}
+
+// RequestLogEntry represents a single request in the live log
+type RequestLogEntry struct {
+	Timestamp      int64   `json:"timestamp"`      // Unix milliseconds
+	RequestType    string  `json:"requestType"`    // GET, POST, etc.
+	ResponseTime   float64 `json:"responseTime"`   // In milliseconds
+	URL            string  `json:"url"`
+	ResponseLength int64   `json:"responseLength"`
+	Success        bool    `json:"success"`
+}
+
+// LiveRequestLogResponse returns recent individual requests
+type LiveRequestLogResponse struct {
+	RunID    string             `json:"runId"`
+	Requests []RequestLogEntry  `json:"requests"`
+	Total    int                `json:"total"`    // Total requests in the log
+	Limit    int                `json:"limit"`    // Number of requests returned
+}

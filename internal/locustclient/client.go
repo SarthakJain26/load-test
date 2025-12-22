@@ -174,7 +174,7 @@ type LocustStatsResponse struct {
 // convertToMetricSnapshot converts Locust stats response to our domain MetricSnapshot
 func convertToMetricSnapshot(stats *LocustStatsResponse) *domain.MetricSnapshot {
 	snapshot := &domain.MetricSnapshot{
-		Timestamp:     time.Now(),
+		Timestamp:     time.Now().UnixMilli(), // Unix milliseconds
 		TotalRPS:      stats.TotalRps,
 		ErrorRate:     stats.FailRatio * 100, // Convert to percentage
 		CurrentUsers:  stats.CurrentUserCount,

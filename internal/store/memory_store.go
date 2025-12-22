@@ -6,98 +6,239 @@ import (
 	"sync"
 )
 
-// TestRunRepository defines the interface for TestRun persistence operations
-type TestRunRepository interface {
-	Create(run *domain.TestRun) error
-	Get(id string) (*domain.TestRun, error)
-	Update(run *domain.TestRun) error
-	List(filter *TestRunFilter) ([]*domain.TestRun, error)
+// LoadTestRepository defines the interface for LoadTest persistence operations
+type LoadTestRepository interface {
+	Create(test *domain.LoadTest) error
+	Get(id string) (*domain.LoadTest, error)
+	Update(test *domain.LoadTest) error
+	List(filter *LoadTestFilter) ([]*domain.LoadTest, error)
 	Delete(id string) error
 }
 
-// TestRunFilter provides filtering options for listing test runs
-type TestRunFilter struct {
-	TenantID *string
-	EnvID    *string
-	Status   *domain.TestRunStatus
-	Limit    int
+// LoadTestFilter provides filtering options for listing load tests
+type LoadTestFilter struct {
+	AccountID *string
+	OrgID     *string
+	ProjectID *string
+	EnvID     *string
+	Tags      []string
+	Limit     int
 }
 
-// InMemoryTestRunStore is an in-memory implementation of TestRunRepository
+// LoadTestRunRepository defines the interface for LoadTestRun persistence operations
+type LoadTestRunRepository interface {
+	Create(run *domain.LoadTestRun) error
+	Get(id string) (*domain.LoadTestRun, error)
+	Update(run *domain.LoadTestRun) error
+	List(filter *LoadTestRunFilter) ([]*domain.LoadTestRun, error)
+	Delete(id string) error
+}
+
+// LoadTestRunFilter provides filtering options for listing load test runs
+type LoadTestRunFilter struct {
+	LoadTestID *string
+	AccountID  *string
+	OrgID      *string
+	ProjectID  *string
+	EnvID      *string
+	Status     *domain.LoadTestRunStatus
+	Limit      int
+}
+
+// InMemoryLoadTestStore is an in-memory implementation of LoadTestRepository
 // Thread-safe using RWMutex
-type InMemoryTestRunStore struct {
-	mu   sync.RWMutex
-	runs map[string]*domain.TestRun
+type InMemoryLoadTestStore struct {
+	mu    sync.RWMutex
+	tests map[string]*domain.LoadTest
 }
 
-// NewInMemoryTestRunStore creates a new in-memory test run store
-func NewInMemoryTestRunStore() *InMemoryTestRunStore {
-	return &InMemoryTestRunStore{
-		runs: make(map[string]*domain.TestRun),
+// NewInMemoryLoadTestStore creates a new in-memory load test store
+func NewInMemoryLoadTestStore() *InMemoryLoadTestStore {
+	return &InMemoryLoadTestStore{
+		tests: make(map[string]*domain.LoadTest),
 	}
 }
 
-// Create stores a new test run
-func (s *InMemoryTestRunStore) Create(run *domain.TestRun) error {
+// InMemoryLoadTestRunStore is an in-memory implementation of LoadTestRunRepository
+// Thread-safe using RWMutex
+type InMemoryLoadTestRunStore struct {
+	mu   sync.RWMutex
+	runs map[string]*domain.LoadTestRun
+}
+
+// NewInMemoryLoadTestRunStore creates a new in-memory load test run store
+func NewInMemoryLoadTestRunStore() *InMemoryLoadTestRunStore {
+	return &InMemoryLoadTestRunStore{
+		runs: make(map[string]*domain.LoadTestRun),
+	}
+}
+
+// LoadTest CRUD operations
+
+// Create stores a new load test
+func (s *InMemoryLoadTestStore) Create(test *domain.LoadTest) error {
+	if test.ID == "" {
+		return fmt.Errorf("load test ID cannot be empty")
+	}
+	
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	if _, exists := s.tests[test.ID]; exists {
+		return fmt.Errorf("load test with ID %s already exists", test.ID)
+	}
+	
+	s.tests[test.ID] = copyLoadTest(test)
+	return nil
+}
+
+// Get retrieves a load test by ID
+func (s *InMemoryLoadTestStore) Get(id string) (*domain.LoadTest, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	test, exists := s.tests[id]
+	if !exists {
+		return nil, fmt.Errorf("load test with ID %s not found", id)
+	}
+	
+	return copyLoadTest(test), nil
+}
+
+// Update updates an existing load test
+func (s *InMemoryLoadTestStore) Update(test *domain.LoadTest) error {
+	if test.ID == "" {
+		return fmt.Errorf("load test ID cannot be empty")
+	}
+	
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	if _, exists := s.tests[test.ID]; !exists {
+		return fmt.Errorf("load test with ID %s not found", test.ID)
+	}
+	
+	s.tests[test.ID] = copyLoadTest(test)
+	return nil
+}
+
+// List retrieves load tests based on filter criteria
+func (s *InMemoryLoadTestStore) List(filter *LoadTestFilter) ([]*domain.LoadTest, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	var results []*domain.LoadTest
+	
+	for _, test := range s.tests {
+		if filter != nil {
+			if filter.AccountID != nil && test.AccountID != *filter.AccountID {
+				continue
+			}
+			if filter.OrgID != nil && test.OrgID != *filter.OrgID {
+				continue
+			}
+			if filter.ProjectID != nil && test.ProjectID != *filter.ProjectID {
+				continue
+			}
+			if filter.EnvID != nil && test.EnvID != *filter.EnvID {
+				continue
+			}
+			if len(filter.Tags) > 0 && !hasAnyTag(test.Tags, filter.Tags) {
+				continue
+			}
+		}
+		
+		results = append(results, copyLoadTest(test))
+		
+		if filter != nil && filter.Limit > 0 && len(results) >= filter.Limit {
+			break
+		}
+	}
+	
+	return results, nil
+}
+
+// Delete removes a load test by ID
+func (s *InMemoryLoadTestStore) Delete(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	if _, exists := s.tests[id]; !exists {
+		return fmt.Errorf("load test with ID %s not found", id)
+	}
+	
+	delete(s.tests, id)
+	return nil
+}
+
+// LoadTestRun CRUD operations
+
+// Create stores a new load test run
+func (s *InMemoryLoadTestRunStore) Create(run *domain.LoadTestRun) error {
 	if run.ID == "" {
-		return fmt.Errorf("test run ID cannot be empty")
+		return fmt.Errorf("load test run ID cannot be empty")
 	}
 	
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	
 	if _, exists := s.runs[run.ID]; exists {
-		return fmt.Errorf("test run with ID %s already exists", run.ID)
+		return fmt.Errorf("load test run with ID %s already exists", run.ID)
 	}
 	
-	// Create a copy to avoid external mutations
-	s.runs[run.ID] = copyTestRun(run)
+	s.runs[run.ID] = copyLoadTestRun(run)
 	return nil
 }
 
-// Get retrieves a test run by ID
-func (s *InMemoryTestRunStore) Get(id string) (*domain.TestRun, error) {
+// Get retrieves a load test run by ID
+func (s *InMemoryLoadTestRunStore) Get(id string) (*domain.LoadTestRun, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	
 	run, exists := s.runs[id]
 	if !exists {
-		return nil, fmt.Errorf("test run with ID %s not found", id)
+		return nil, fmt.Errorf("load test run with ID %s not found", id)
 	}
 	
-	// Return a copy to avoid external mutations
-	return copyTestRun(run), nil
+	return copyLoadTestRun(run), nil
 }
 
-// Update updates an existing test run
-func (s *InMemoryTestRunStore) Update(run *domain.TestRun) error {
+// Update updates an existing load test run
+func (s *InMemoryLoadTestRunStore) Update(run *domain.LoadTestRun) error {
 	if run.ID == "" {
-		return fmt.Errorf("test run ID cannot be empty")
+		return fmt.Errorf("load test run ID cannot be empty")
 	}
 	
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	
 	if _, exists := s.runs[run.ID]; !exists {
-		return fmt.Errorf("test run with ID %s not found", run.ID)
+		return fmt.Errorf("load test run with ID %s not found", run.ID)
 	}
 	
-	// Store a copy to avoid external mutations
-	s.runs[run.ID] = copyTestRun(run)
+	s.runs[run.ID] = copyLoadTestRun(run)
 	return nil
 }
 
-// List retrieves test runs based on filter criteria
-func (s *InMemoryTestRunStore) List(filter *TestRunFilter) ([]*domain.TestRun, error) {
+// List retrieves load test runs based on filter criteria
+func (s *InMemoryLoadTestRunStore) List(filter *LoadTestRunFilter) ([]*domain.LoadTestRun, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	
-	var results []*domain.TestRun
+	var results []*domain.LoadTestRun
 	
 	for _, run := range s.runs {
-		// Apply filters
 		if filter != nil {
-			if filter.TenantID != nil && run.TenantID != *filter.TenantID {
+			if filter.LoadTestID != nil && run.LoadTestID != *filter.LoadTestID {
+				continue
+			}
+			if filter.AccountID != nil && run.AccountID != *filter.AccountID {
+				continue
+			}
+			if filter.OrgID != nil && run.OrgID != *filter.OrgID {
+				continue
+			}
+			if filter.ProjectID != nil && run.ProjectID != *filter.ProjectID {
 				continue
 			}
 			if filter.EnvID != nil && run.EnvID != *filter.EnvID {
@@ -108,9 +249,8 @@ func (s *InMemoryTestRunStore) List(filter *TestRunFilter) ([]*domain.TestRun, e
 			}
 		}
 		
-		results = append(results, copyTestRun(run))
+		results = append(results, copyLoadTestRun(run))
 		
-		// Apply limit
 		if filter != nil && filter.Limit > 0 && len(results) >= filter.Limit {
 			break
 		}
@@ -119,63 +259,117 @@ func (s *InMemoryTestRunStore) List(filter *TestRunFilter) ([]*domain.TestRun, e
 	return results, nil
 }
 
-// Delete removes a test run by ID
-func (s *InMemoryTestRunStore) Delete(id string) error {
+// Delete removes a load test run by ID
+func (s *InMemoryLoadTestRunStore) Delete(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	
 	if _, exists := s.runs[id]; !exists {
-		return fmt.Errorf("test run with ID %s not found", id)
+		return fmt.Errorf("load test run with ID %s not found", id)
 	}
 	
 	delete(s.runs, id)
 	return nil
 }
 
-// copyTestRun creates a deep copy of a TestRun to prevent external mutations
-func copyTestRun(run *domain.TestRun) *domain.TestRun {
+// copyLoadTest creates a deep copy of a LoadTest to prevent external mutations
+func copyLoadTest(test *domain.LoadTest) *domain.LoadTest {
+	if test == nil {
+		return nil
+	}
+	
+	result := &domain.LoadTest{
+		ID:                 test.ID,
+		Name:               test.Name,
+		Description:        test.Description,
+		AccountID:          test.AccountID,
+		OrgID:              test.OrgID,
+		ProjectID:          test.ProjectID,
+		EnvID:              test.EnvID,
+		LocustClusterID:    test.LocustClusterID,
+		TargetURL:          test.TargetURL,
+		Locustfile:         test.Locustfile,
+		ScenarioID:         test.ScenarioID,
+		DefaultUsers:       test.DefaultUsers,
+		DefaultSpawnRate:   test.DefaultSpawnRate,
+		CreatedAt:          test.CreatedAt,
+		CreatedBy:          test.CreatedBy,
+		UpdatedAt:          test.UpdatedAt,
+		UpdatedBy:          test.UpdatedBy,
+	}
+	
+	if test.Tags != nil {
+		result.Tags = make([]string, len(test.Tags))
+		copy(result.Tags, test.Tags)
+	}
+	
+	if test.DefaultDurationSec != nil {
+		val := *test.DefaultDurationSec
+		result.DefaultDurationSec = &val
+	}
+	
+	if test.MaxDurationSec != nil {
+		val := *test.MaxDurationSec
+		result.MaxDurationSec = &val
+	}
+	
+	if test.RecentRuns != nil {
+		result.RecentRuns = make([]domain.RecentRun, len(test.RecentRuns))
+		copy(result.RecentRuns, test.RecentRuns)
+	}
+	
+	if test.Metadata != nil {
+		result.Metadata = make(map[string]any)
+		for k, v := range test.Metadata {
+			result.Metadata[k] = v
+		}
+	}
+	
+	return result
+}
+
+// copyLoadTestRun creates a deep copy of a LoadTestRun to prevent external mutations
+func copyLoadTestRun(run *domain.LoadTestRun) *domain.LoadTestRun {
 	if run == nil {
 		return nil
 	}
 	
-	copy := &domain.TestRun{
-		ID:              run.ID,
-		TenantID:        run.TenantID,
-		EnvID:           run.EnvID,
-		LocustClusterID: run.LocustClusterID,
-		ScenarioID:      run.ScenarioID,
-		TargetUsers:     run.TargetUsers,
-		SpawnRate:       run.SpawnRate,
-		Status:          run.Status,
+	result := &domain.LoadTestRun{
+		ID:          run.ID,
+		LoadTestID:  run.LoadTestID,
+		Name:        run.Name,
+		AccountID:   run.AccountID,
+		OrgID:       run.OrgID,
+		ProjectID:   run.ProjectID,
+		EnvID:       run.EnvID,
+		TargetUsers: run.TargetUsers,
+		SpawnRate:   run.SpawnRate,
+		Status:      run.Status,
+		StartedAt:   run.StartedAt,
+		FinishedAt:  run.FinishedAt,
+		CreatedAt:   run.CreatedAt,
+		CreatedBy:   run.CreatedBy,
+		UpdatedAt:   run.UpdatedAt,
+		UpdatedBy:   run.UpdatedBy,
 	}
 	
 	if run.DurationSeconds != nil {
-		duration := *run.DurationSeconds
-		copy.DurationSeconds = &duration
-	}
-	
-	if run.StartedAt != nil {
-		startedAt := *run.StartedAt
-		copy.StartedAt = &startedAt
-	}
-	
-	if run.FinishedAt != nil {
-		finishedAt := *run.FinishedAt
-		copy.FinishedAt = &finishedAt
+		val := *run.DurationSeconds
+		result.DurationSeconds = &val
 	}
 	
 	if run.Metadata != nil {
-		copy.Metadata = make(map[string]any)
+		result.Metadata = make(map[string]any)
 		for k, v := range run.Metadata {
-			copy.Metadata[k] = v
+			result.Metadata[k] = v
 		}
 	}
 	
 	if run.LastMetrics != nil {
-		copy.LastMetrics = copyMetricSnapshot(run.LastMetrics)
+		result.LastMetrics = copyMetricSnapshot(run.LastMetrics)
 	}
 	
-	return copy
+	return result
 }
 
 // copyMetricSnapshot creates a copy of a MetricSnapshot
@@ -191,6 +385,9 @@ func copyMetricSnapshot(metrics *domain.MetricSnapshot) *domain.MetricSnapshot {
 		TotalFailures:     metrics.TotalFailures,
 		ErrorRate:         metrics.ErrorRate,
 		AverageResponseMs: metrics.AverageResponseMs,
+		MinResponseMs:     metrics.MinResponseMs,
+		MaxResponseMs:     metrics.MaxResponseMs,
+		AvgResponseMs:     metrics.AvgResponseMs,
 		P50ResponseMs:     metrics.P50ResponseMs,
 		P95ResponseMs:     metrics.P95ResponseMs,
 		P99ResponseMs:     metrics.P99ResponseMs,
@@ -207,9 +404,14 @@ func copyMetricSnapshot(metrics *domain.MetricSnapshot) *domain.MetricSnapshot {
 					NumRequests:        v.NumRequests,
 					NumFailures:        v.NumFailures,
 					AvgResponseTime:    v.AvgResponseTime,
+					AvgResponseTimeMs:  v.AvgResponseTimeMs,
 					MinResponseTime:    v.MinResponseTime,
+					MinResponseTimeMs:  v.MinResponseTimeMs,
 					MaxResponseTime:    v.MaxResponseTime,
+					MaxResponseTimeMs:  v.MaxResponseTimeMs,
 					MedianResponseTime: v.MedianResponseTime,
+					P50ResponseMs:      v.P50ResponseMs,
+					P95ResponseMs:      v.P95ResponseMs,
 					RequestsPerSec:     v.RequestsPerSec,
 				}
 			}
@@ -217,4 +419,18 @@ func copyMetricSnapshot(metrics *domain.MetricSnapshot) *domain.MetricSnapshot {
 	}
 	
 	return copy
+}
+
+// hasAnyTag checks if any of the filter tags exist in the test tags
+func hasAnyTag(testTags []string, filterTags []string) bool {
+	tagSet := make(map[string]bool)
+	for _, tag := range testTags {
+		tagSet[tag] = true
+	}
+	for _, filterTag := range filterTags {
+		if tagSet[filterTag] {
+			return true
+		}
+	}
+	return false
 }

@@ -1,61 +1,99 @@
 package domain
 
-import "time"
-
-// TestRunStatus represents the current status of a load test run
-type TestRunStatus string
+// LoadTestRunStatus represents the current status of a load test run
+type LoadTestRunStatus string
 
 const (
-	TestRunStatusPending  TestRunStatus = "Pending"
-	TestRunStatusRunning  TestRunStatus = "Running"
-	TestRunStatusStopping TestRunStatus = "Stopping"
-	TestRunStatusFinished TestRunStatus = "Finished"
-	TestRunStatusFailed   TestRunStatus = "Failed"
+	LoadTestRunStatusPending  LoadTestRunStatus = "Pending"
+	LoadTestRunStatusRunning  LoadTestRunStatus = "Running"
+	LoadTestRunStatusStopping LoadTestRunStatus = "Stopping"
+	LoadTestRunStatusFinished LoadTestRunStatus = "Finished"
+	LoadTestRunStatusFailed   LoadTestRunStatus = "Failed"
 )
-
-// Tenant represents a tenant in the system (for multi-tenancy support)
-type Tenant struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
-// Environment represents an environment within a tenant (e.g., dev, staging, prod)
-type Environment struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Type     string `json:"type"` // e.g., "dev", "staging", "production"
-	TenantID string `json:"tenantId"`
-}
 
 // LocustCluster represents a Locust master cluster configuration
 type LocustCluster struct {
 	ID        string `json:"id"`
 	BaseURL   string `json:"baseUrl"`   // e.g., "http://locust-master:8089"
-	TenantID  string `json:"tenantId"`
-	EnvID     string `json:"envId"`
-	AuthToken string `json:"authToken"` // Optional API key/token for Locust master
+	AccountID string `json:"accountId"`
+	OrgID     string `json:"orgId"`
+	ProjectID string `json:"projectId"`
+	EnvID     string `json:"envId,omitempty"` // Optional environment
+	AuthToken string `json:"authToken"`       // Optional API key/token for Locust master
 }
 
-// TestRun represents a load test execution
-type TestRun struct {
+// RecentRun represents a summary of a recent LoadTestRun execution
+type RecentRun struct {
+	ID              string            `json:"id"`
+	Name            string            `json:"name,omitempty"`
+	Status          LoadTestRunStatus `json:"status"`
+	TargetUsers     int               `json:"targetUsers"`
+	SpawnRate       float64           `json:"spawnRate"`
+	DurationSeconds *int              `json:"durationSeconds,omitempty"`
+	StartedAt       int64             `json:"startedAt,omitempty"`  // Unix milliseconds
+	FinishedAt      int64             `json:"finishedAt,omitempty"` // Unix milliseconds
+	CreatedAt       int64             `json:"createdAt"`            // Unix milliseconds
+	CreatedBy       string            `json:"createdBy"`
+}
+
+// LoadTest represents a load test definition/template
+type LoadTest struct {
 	ID              string         `json:"id"`
-	TenantID        string         `json:"tenantId"`
-	EnvID           string         `json:"envId"`
+	Name            string         `json:"name"`
+	Description     string         `json:"description,omitempty"`
+	Tags            []string       `json:"tags,omitempty"`
+	AccountID       string         `json:"accountId"`
+	OrgID           string         `json:"orgId"`
+	ProjectID       string         `json:"projectId"`
+	EnvID           string         `json:"envId,omitempty"`     // Optional environment
 	LocustClusterID string         `json:"locustClusterId"`
-	ScenarioID      string         `json:"scenarioId"` // Maps to locustfile/scenario/tag
-	TargetUsers     int            `json:"targetUsers"`
-	SpawnRate       float64        `json:"spawnRate"`
-	DurationSeconds *int           `json:"durationSeconds,omitempty"` // Optional duration
-	Status          TestRunStatus  `json:"status"`
-	StartedAt       *time.Time     `json:"startedAt,omitempty"`
-	FinishedAt      *time.Time     `json:"finishedAt,omitempty"`
-	Metadata        map[string]any `json:"metadata,omitempty"` // Additional metadata (notes, tags, etc.)
-	LastMetrics     *MetricSnapshot `json:"lastMetrics,omitempty"`
+	TargetURL       string         `json:"targetUrl"`
+	Locustfile      string         `json:"locustfile"`          // Path or name of the locustfile
+	ScenarioID      string         `json:"scenarioId,omitempty"` // Optional scenario/tag within locustfile
+	// Default runtime parameters
+	DefaultUsers         int     `json:"defaultUsers,omitempty"`
+	DefaultSpawnRate     float64 `json:"defaultSpawnRate,omitempty"`
+	DefaultDurationSec   *int    `json:"defaultDurationSec,omitempty"`
+	MaxDurationSec       *int    `json:"maxDurationSec,omitempty"` // Maximum allowed duration
+	// Recent runs (up to 10 most recent)
+	RecentRuns []RecentRun `json:"recentRuns,omitempty"`
+	// Audit fields (Unix milliseconds)
+	CreatedAt  int64  `json:"createdAt"`
+	CreatedBy  string `json:"createdBy"`
+	UpdatedAt  int64  `json:"updatedAt"`
+	UpdatedBy  string `json:"updatedBy"`
+	Metadata   map[string]any `json:"metadata,omitempty"` // Additional metadata
+}
+
+// LoadTestRun represents an actual execution of a load test
+type LoadTestRun struct {
+	ID         string `json:"id"`
+	LoadTestID string `json:"loadTestId"` // Reference to the LoadTest
+	Name       string `json:"name,omitempty"` // Optional run name
+	AccountID  string `json:"accountId"`
+	OrgID      string `json:"orgId"`
+	ProjectID  string `json:"projectId"`
+	EnvID      string `json:"envId,omitempty"` // Optional environment
+	// Runtime parameters (can override LoadTest defaults)
+	TargetUsers     int     `json:"targetUsers"`
+	SpawnRate       float64 `json:"spawnRate"`
+	DurationSeconds *int    `json:"durationSeconds,omitempty"`
+	// Execution state
+	Status       LoadTestRunStatus `json:"status"`
+	StartedAt    int64             `json:"startedAt,omitempty"`  // Unix milliseconds
+	FinishedAt   int64             `json:"finishedAt,omitempty"` // Unix milliseconds
+	LastMetrics  *MetricSnapshot   `json:"lastMetrics,omitempty"`
+	// Audit fields (Unix milliseconds)
+	CreatedAt int64          `json:"createdAt"`
+	CreatedBy string         `json:"createdBy"`
+	UpdatedAt int64          `json:"updatedAt"`
+	UpdatedBy string         `json:"updatedBy"`
+	Metadata  map[string]any `json:"metadata,omitempty"` // Additional run metadata
 }
 
 // MetricSnapshot represents aggregated metrics from Locust at a point in time
 type MetricSnapshot struct {
-	Timestamp         time.Time          `json:"timestamp"`
+	Timestamp         int64              `json:"timestamp"` // Unix milliseconds
 	TotalRPS          float64            `json:"totalRps"`
 	TotalRequests     int64              `json:"totalRequests"`
 	TotalFailures     int64              `json:"totalFailures"`

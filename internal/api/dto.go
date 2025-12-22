@@ -1,31 +1,106 @@
 package api
 
-import "Load-manager-cli/internal/domain"
+import (
+	"Load-manager-cli/internal/domain"
+	"time"
+)
 
-// CreateTestRequest represents the request body for creating a test run
-type CreateTestRequest struct {
-	TenantID        string         `json:"tenantId" binding:"required"`
-	EnvID           string         `json:"envId" binding:"required"`
-	ScenarioID      string         `json:"scenarioId" binding:"required"`
-	TargetUsers     int            `json:"targetUsers" binding:"required,min=1"`
-	SpawnRate       float64        `json:"spawnRate" binding:"required,min=0.1"`
-	DurationSeconds *int           `json:"durationSeconds,omitempty"`
+// LoadTest DTOs
+
+// CreateLoadTestRequest represents the request body for creating a load test
+type CreateLoadTestRequest struct {
+	Name               string         `json:"name" binding:"required"`
+	Description        string         `json:"description,omitempty"`
+	Tags               []string       `json:"tags,omitempty"`
+	AccountID          string         `json:"accountId" binding:"required"`
+	OrgID              string         `json:"orgId" binding:"required"`
+	ProjectID          string         `json:"projectId" binding:"required"`
+	EnvID              string         `json:"envId,omitempty"`
+	LocustClusterID    string         `json:"locustClusterId" binding:"required"`
+	TargetURL          string         `json:"targetUrl" binding:"required"`
+	Locustfile         string         `json:"locustfile" binding:"required"`
+	ScenarioID         string         `json:"scenarioId,omitempty"`
+	DefaultUsers       int            `json:"defaultUsers,omitempty"`
+	DefaultSpawnRate   float64        `json:"defaultSpawnRate,omitempty"`
+	DefaultDurationSec *int           `json:"defaultDurationSec,omitempty"`
+	MaxDurationSec     *int           `json:"maxDurationSec,omitempty"`
+	CreatedBy          string         `json:"createdBy" binding:"required"`
+	Metadata           map[string]any `json:"metadata,omitempty"`
+}
+
+// UpdateLoadTestRequest represents the request body for updating a load test
+type UpdateLoadTestRequest struct {
+	Name               string         `json:"name,omitempty"`
+	Description        string         `json:"description,omitempty"`
+	Tags               []string       `json:"tags,omitempty"`
+	TargetURL          string         `json:"targetUrl,omitempty"`
+	Locustfile         string         `json:"locustfile,omitempty"`
+	ScenarioID         string         `json:"scenarioId,omitempty"`
+	DefaultUsers       int            `json:"defaultUsers,omitempty"`
+	DefaultSpawnRate   float64        `json:"defaultSpawnRate,omitempty"`
+	DefaultDurationSec *int           `json:"defaultDurationSec,omitempty"`
+	MaxDurationSec     *int           `json:"maxDurationSec,omitempty"`
+	UpdatedBy          string         `json:"updatedBy" binding:"required"`
+	Metadata           map[string]any `json:"metadata,omitempty"`
+}
+
+// LoadTestResponse represents the response body for a load test
+type LoadTestResponse struct {
+	ID                 string         `json:"id"`
+	Name               string         `json:"name"`
+	Description        string         `json:"description,omitempty"`
+	Tags               []string       `json:"tags,omitempty"`
+	AccountID          string         `json:"accountId"`
+	OrgID              string         `json:"orgId"`
+	ProjectID          string         `json:"projectId"`
+	EnvID              string         `json:"envId,omitempty"`
+	LocustClusterID    string         `json:"locustClusterId"`
+	TargetURL          string         `json:"targetUrl"`
+	Locustfile         string         `json:"locustfile"`
+	ScenarioID         string         `json:"scenarioId,omitempty"`
+	DefaultUsers       int            `json:"defaultUsers,omitempty"`
+	DefaultSpawnRate   float64        `json:"defaultSpawnRate,omitempty"`
+	DefaultDurationSec *int           `json:"defaultDurationSec,omitempty"`
+	MaxDurationSec     *int           `json:"maxDurationSec,omitempty"`
+	CreatedAt          string         `json:"createdAt"`
+	CreatedBy          string         `json:"createdBy"`
+	UpdatedAt          string         `json:"updatedAt"`
+	UpdatedBy          string         `json:"updatedBy"`
+	Metadata           map[string]any `json:"metadata,omitempty"`
+}
+
+// LoadTestRun DTOs
+
+// CreateLoadTestRunRequest represents the request body for creating/starting a load test run
+type CreateLoadTestRunRequest struct {
+	LoadTestID      string         `json:"loadTestId" binding:"required"`
+	Name            string         `json:"name,omitempty"`
+	TargetUsers     *int           `json:"targetUsers,omitempty"`     // Override from LoadTest
+	SpawnRate       *float64       `json:"spawnRate,omitempty"`       // Override from LoadTest
+	DurationSeconds *int           `json:"durationSeconds,omitempty"` // Override from LoadTest
+	CreatedBy       string         `json:"createdBy" binding:"required"`
 	Metadata        map[string]any `json:"metadata,omitempty"`
 }
 
-// TestRunResponse represents the response body for a test run
-type TestRunResponse struct {
+// LoadTestRunResponse represents the response body for a load test run
+type LoadTestRunResponse struct {
 	ID              string                  `json:"id"`
-	TenantID        string                  `json:"tenantId"`
-	EnvID           string                  `json:"envId"`
-	LocustClusterID string                  `json:"locustClusterId"`
-	ScenarioID      string                  `json:"scenarioId"`
+	LoadTestID      string                  `json:"loadTestId"`
+	Name            string                  `json:"name,omitempty"`
+	AccountID       string                  `json:"accountId"`
+	OrgID           string                  `json:"orgId"`
+	ProjectID       string                  `json:"projectId"`
+	EnvID           string                  `json:"envId,omitempty"`
 	TargetUsers     int                     `json:"targetUsers"`
 	SpawnRate       float64                 `json:"spawnRate"`
 	DurationSeconds *int                    `json:"durationSeconds,omitempty"`
 	Status          string                  `json:"status"`
 	StartedAt       *string                 `json:"startedAt,omitempty"`
 	FinishedAt      *string                 `json:"finishedAt,omitempty"`
+	CreatedAt       string                  `json:"createdAt"`
+	CreatedBy       string                  `json:"createdBy"`
+	UpdatedAt       string                  `json:"updatedAt"`
+	UpdatedBy       string                  `json:"updatedBy"`
 	Metadata        map[string]any          `json:"metadata,omitempty"`
 	LastMetrics     *MetricSnapshotResponse `json:"lastMetrics,omitempty"`
 }
@@ -81,8 +156,10 @@ type LocustCallbackMetricsRequest struct {
 
 // RegisterExternalTestRequest is used when a test is started directly from Locust UI
 type RegisterExternalTestRequest struct {
-	TenantID    string  `json:"tenantId" binding:"required"`
-	EnvID       string  `json:"envId" binding:"required"`
+	AccountID   string  `json:"accountId" binding:"required"`
+	OrgID       string  `json:"orgId" binding:"required"`
+	ProjectID   string  `json:"projectId" binding:"required"`
+	EnvID       string  `json:"envId,omitempty"`
 	ScenarioID  string  `json:"scenarioId"`
 	TargetUsers int     `json:"targetUsers"`
 	SpawnRate   float64 `json:"spawnRate"`
@@ -108,27 +185,63 @@ type SuccessResponse struct {
 
 // Helper functions to convert between domain models and DTOs
 
-func toTestRunResponse(run *domain.TestRun) *TestRunResponse {
-	resp := &TestRunResponse{
+// LoadTest conversions
+
+func toLoadTestResponse(test *domain.LoadTest) *LoadTestResponse {
+	return &LoadTestResponse{
+		ID:                 test.ID,
+		Name:               test.Name,
+		Description:        test.Description,
+		Tags:               test.Tags,
+		AccountID:          test.AccountID,
+		OrgID:              test.OrgID,
+		ProjectID:          test.ProjectID,
+		EnvID:              test.EnvID,
+		LocustClusterID:    test.LocustClusterID,
+		TargetURL:          test.TargetURL,
+		Locustfile:         test.Locustfile,
+		ScenarioID:         test.ScenarioID,
+		DefaultUsers:       test.DefaultUsers,
+		DefaultSpawnRate:   test.DefaultSpawnRate,
+		DefaultDurationSec: test.DefaultDurationSec,
+		MaxDurationSec:     test.MaxDurationSec,
+		CreatedAt:          time.UnixMilli(test.CreatedAt).Format("2006-01-02T15:04:05Z07:00"),
+		CreatedBy:          test.CreatedBy,
+		UpdatedAt:          time.UnixMilli(test.UpdatedAt).Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedBy:          test.UpdatedBy,
+		Metadata:           test.Metadata,
+	}
+}
+
+// LoadTestRun conversions
+
+func toLoadTestRunResponse(run *domain.LoadTestRun) *LoadTestRunResponse {
+	resp := &LoadTestRunResponse{
 		ID:              run.ID,
-		TenantID:        run.TenantID,
+		LoadTestID:      run.LoadTestID,
+		Name:            run.Name,
+		AccountID:       run.AccountID,
+		OrgID:           run.OrgID,
+		ProjectID:       run.ProjectID,
 		EnvID:           run.EnvID,
-		LocustClusterID: run.LocustClusterID,
-		ScenarioID:      run.ScenarioID,
 		TargetUsers:     run.TargetUsers,
 		SpawnRate:       run.SpawnRate,
 		DurationSeconds: run.DurationSeconds,
 		Status:          string(run.Status),
+		CreatedAt:       time.UnixMilli(run.CreatedAt).Format("2006-01-02T15:04:05Z07:00"),
+		CreatedBy:       run.CreatedBy,
+		UpdatedAt:       time.UnixMilli(run.UpdatedAt).Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedBy:       run.UpdatedBy,
 		Metadata:        run.Metadata,
 	}
 	
-	if run.StartedAt != nil {
-		startedAt := run.StartedAt.Format("2006-01-02T15:04:05Z07:00")
+	if run.StartedAt > 0 {
+		startedAt := time.UnixMilli(run.StartedAt).Format("2006-01-02T15:04:05Z07:00")
 		resp.StartedAt = &startedAt
 	}
 	
-	if run.FinishedAt != nil {
-		finishedAt := run.FinishedAt.Format("2006-01-02T15:04:05Z07:00")
+	if run.FinishedAt > 0 {
+		finishedAt := time.UnixMilli(run.FinishedAt).Format("2006-01-02T15:04:05Z07:00")
 		resp.FinishedAt = &finishedAt
 	}
 	
@@ -141,7 +254,7 @@ func toTestRunResponse(run *domain.TestRun) *TestRunResponse {
 
 func toMetricSnapshotResponse(metrics *domain.MetricSnapshot) *MetricSnapshotResponse {
 	resp := &MetricSnapshotResponse{
-		Timestamp:         metrics.Timestamp.Format("2006-01-02T15:04:05Z07:00"),
+		Timestamp:         time.UnixMilli(metrics.Timestamp).Format("2006-01-02T15:04:05Z07:00"),
 		TotalRPS:          metrics.TotalRPS,
 		TotalRequests:     metrics.TotalRequests,
 		TotalFailures:     metrics.TotalFailures,

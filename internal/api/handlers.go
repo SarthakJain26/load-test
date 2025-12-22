@@ -2,135 +2,33 @@ package api
 
 import (
 	"Load-manager-cli/internal/config"
-	"Load-manager-cli/internal/domain"
 	"Load-manager-cli/internal/service"
 	"Load-manager-cli/internal/store"
 	"encoding/json"
 	"log"
 	"net/http"
 	"strings"
-
-	"github.com/gorilla/mux"
 )
 
 // Handler contains all HTTP handlers for the API
 type Handler struct {
-	orchestrator *service.Orchestrator
-	config       *config.Config
+	orchestrator     *service.Orchestrator
+	loadTestStore    store.LoadTestRepository
+	loadTestRunStore store.LoadTestRunRepository
+	config           *config.Config
 }
 
 // NewHandler creates a new API handler
-func NewHandler(orchestrator *service.Orchestrator, config *config.Config) *Handler {
+func NewHandler(orchestrator *service.Orchestrator, loadTestStore store.LoadTestRepository, loadTestRunStore store.LoadTestRunRepository, config *config.Config) *Handler {
 	return &Handler{
-		orchestrator: orchestrator,
-		config:       config,
+		orchestrator:     orchestrator,
+		loadTestStore:    loadTestStore,
+		loadTestRunStore: loadTestRunStore,
+		config:           config,
 	}
 }
 
-// CreateTest handles POST /v1/tests - creates and starts a new load test
-func (h *Handler) CreateTest(w http.ResponseWriter, r *http.Request) {
-	var req CreateTestRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid request body", err)
-		return
-	}
-	
-	// Validate request
-	if req.TenantID == "" || req.EnvID == "" || req.ScenarioID == "" {
-		respondError(w, http.StatusBadRequest, "tenantId, envId, and scenarioId are required", nil)
-		return
-	}
-	if req.TargetUsers < 1 {
-		respondError(w, http.StatusBadRequest, "targetUsers must be at least 1", nil)
-		return
-	}
-	if req.SpawnRate < 0.1 {
-		respondError(w, http.StatusBadRequest, "spawnRate must be at least 0.1", nil)
-		return
-	}
-	
-	// Create test run
-	run, err := h.orchestrator.CreateTestRun(&service.CreateTestRunRequest{
-		TenantID:        req.TenantID,
-		EnvID:           req.EnvID,
-		ScenarioID:      req.ScenarioID,
-		TargetUsers:     req.TargetUsers,
-		SpawnRate:       req.SpawnRate,
-		DurationSeconds: req.DurationSeconds,
-		Metadata:        req.Metadata,
-	})
-	
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to create test run", err)
-		return
-	}
-	
-	respondJSON(w, http.StatusCreated, toTestRunResponse(run))
-}
-
-// StopTest handles POST /v1/tests/{id}/stop - stops a running test
-func (h *Handler) StopTest(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	testID := vars["id"]
-	
-	if err := h.orchestrator.StopTestRun(testID); err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to stop test run", err)
-		return
-	}
-	
-	respondJSON(w, http.StatusOK, SuccessResponse{
-		Success: true,
-		Message: "Test stopped successfully",
-	})
-}
-
-// GetTest handles GET /v1/tests/{id} - retrieves a test run by ID
-func (h *Handler) GetTest(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	testID := vars["id"]
-	
-	run, err := h.orchestrator.GetTestRun(testID)
-	if err != nil {
-		respondError(w, http.StatusNotFound, "Test run not found", err)
-		return
-	}
-	
-	respondJSON(w, http.StatusOK, toTestRunResponse(run))
-}
-
-// ListTests handles GET /v1/tests - lists test runs with optional filtering
-func (h *Handler) ListTests(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query()
-	
-	filter := &store.TestRunFilter{}
-	
-	if tenantID := query.Get("tenantId"); tenantID != "" {
-		filter.TenantID = &tenantID
-	}
-	
-	if envID := query.Get("envId"); envID != "" {
-		filter.EnvID = &envID
-	}
-	
-	if statusStr := query.Get("status"); statusStr != "" {
-		status := domain.TestRunStatus(statusStr)
-		filter.Status = &status
-	}
-	
-	runs, err := h.orchestrator.ListTestRuns(filter)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to list test runs", err)
-		return
-	}
-	
-	// Convert to response format
-	responses := make([]*TestRunResponse, len(runs))
-	for i, run := range runs {
-		responses[i] = toTestRunResponse(run)
-	}
-	
-	respondJSON(w, http.StatusOK, responses)
-}
+// Old handlers removed - replaced by LoadTest and LoadTestRun handlers in loadtest_handlers.go
 
 // LocustCallbackTestStart handles POST /v1/internal/locust/test-start
 // Called by Locust when a test starts
@@ -214,8 +112,8 @@ func (h *Handler) RegisterExternalTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	if req.TenantID == "" || req.EnvID == "" {
-		respondError(w, http.StatusBadRequest, "tenantId and envId are required", nil)
+	if req.AccountID == "" || req.OrgID == "" || req.ProjectID == "" {
+		respondError(w, http.StatusBadRequest, "accountId, orgId, and projectId are required", nil)
 		return
 	}
 	
@@ -225,7 +123,9 @@ func (h *Handler) RegisterExternalTest(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	orchestratorReq := &service.RegisterExternalTestRunRequest{
-		TenantID:    req.TenantID,
+		AccountID:   req.AccountID,
+		OrgID:       req.OrgID,
+		ProjectID:   req.ProjectID,
 		EnvID:       req.EnvID,
 		ScenarioID:  req.ScenarioID,
 		TargetUsers: req.TargetUsers,

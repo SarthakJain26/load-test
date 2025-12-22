@@ -28,8 +28,10 @@ type ServerConfig struct {
 type ClusterConfig struct {
 	ID        string `yaml:"id" json:"id"`
 	BaseURL   string `yaml:"baseUrl" json:"baseUrl"`
-	TenantID  string `yaml:"tenantId" json:"tenantId"`
-	EnvID     string `yaml:"envId" json:"envId"`
+	AccountID string `yaml:"accountId" json:"accountId"`
+	OrgID     string `yaml:"orgId" json:"orgId"`
+	ProjectID string `yaml:"projectId" json:"projectId"`
+	EnvID     string `yaml:"envId,omitempty" json:"envId,omitempty"`
 	AuthToken string `yaml:"authToken,omitempty" json:"authToken,omitempty"`
 }
 
@@ -85,18 +87,24 @@ func LoadFromFile(path string) (*Config, error) {
 	return &cfg, nil
 }
 
-// GetLocustCluster returns the Locust cluster for a given tenant and environment
-func (c *Config) GetLocustCluster(tenantID, envID string) (*domain.LocustCluster, error) {
+// GetLocustCluster returns the Locust cluster for a given account, org, project, and optional environment
+func (c *Config) GetLocustCluster(accountID, orgID, projectID, envID string) (*domain.LocustCluster, error) {
 	for _, cluster := range c.LocustClusters {
-		if cluster.TenantID == tenantID && cluster.EnvID == envID {
-			return &domain.LocustCluster{
-				ID:        cluster.ID,
-				BaseURL:   cluster.BaseURL,
-				TenantID:  cluster.TenantID,
-				EnvID:     cluster.EnvID,
-				AuthToken: cluster.AuthToken,
-			}, nil
+		// Match account, org, project and optionally env
+		if cluster.AccountID == accountID && cluster.OrgID == orgID && cluster.ProjectID == projectID {
+			// If envID is specified, must match; if not specified in query, match any
+			if envID == "" || cluster.EnvID == "" || cluster.EnvID == envID {
+				return &domain.LocustCluster{
+					ID:        cluster.ID,
+					BaseURL:   cluster.BaseURL,
+					AccountID: cluster.AccountID,
+					OrgID:     cluster.OrgID,
+					ProjectID: cluster.ProjectID,
+					EnvID:     cluster.EnvID,
+					AuthToken: cluster.AuthToken,
+				}, nil
+			}
 		}
 	}
-	return nil, fmt.Errorf("no Locust cluster found for tenant=%s, env=%s", tenantID, envID)
+	return nil, fmt.Errorf("no Locust cluster found for account=%s, org=%s, project=%s, env=%s", accountID, orgID, projectID, envID)
 }

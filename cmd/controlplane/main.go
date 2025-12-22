@@ -54,11 +54,17 @@ func main() {
 	log.Println("Connected to MongoDB successfully")
 
 	// Initialize MongoDB stores
-	testRunStore, err := store.NewMongoTestRunStore(mongoClient.Database())
+	loadTestStore, err := store.NewMongoLoadTestStore(mongoClient.Database())
 	if err != nil {
-		log.Fatalf("Failed to initialize test run store: %v", err)
+		log.Fatalf("Failed to initialize load test store: %v", err)
 	}
-	log.Println("Test run store initialized with indexes")
+	log.Println("Load test store initialized with indexes")
+
+	loadTestRunStore, err := store.NewMongoLoadTestRunStore(mongoClient.Database())
+	if err != nil {
+		log.Fatalf("Failed to initialize load test run store: %v", err)
+	}
+	log.Println("Load test run store initialized with indexes")
 
 	metricsStore, err := store.NewMongoMetricsStore(mongoClient.Database())
 	if err != nil {
@@ -67,13 +73,13 @@ func main() {
 	log.Println("Metrics time-series store initialized with indexes")
 
 	// Initialize orchestrator
-	orchestrator := service.NewOrchestrator(cfg, testRunStore, metricsStore)
+	orchestrator := service.NewOrchestrator(cfg, loadTestStore, loadTestRunStore, metricsStore)
 	orchestrator.Start()
 	log.Println("Orchestrator started")
 
 	// Initialize API handlers
-	handler := api.NewHandler(orchestrator, cfg)
-	visualizationHandler := api.NewVisualizationHandler(testRunStore, metricsStore)
+	handler := api.NewHandler(orchestrator, loadTestStore, loadTestRunStore, cfg)
+	visualizationHandler := api.NewVisualizationHandler(loadTestRunStore, metricsStore)
 
 	// Setup router
 	router := setupRouter(handler, visualizationHandler)
@@ -134,16 +140,29 @@ func setupRouter(handler *api.Handler, visualizationHandler *api.VisualizationHa
 	// API v1 routes
 	v1 := router.PathPrefix("/v1").Subrouter()
 
-	// Test management endpoints
-	v1.HandleFunc("/tests", handler.CreateTest).Methods("POST")
-	v1.HandleFunc("/tests", handler.ListTests).Methods("GET")
-	v1.HandleFunc("/tests/{id}", handler.GetTest).Methods("GET")
-	v1.HandleFunc("/tests/{id}/stop", handler.StopTest).Methods("POST")
+	// LoadTest management endpoints
+	v1.HandleFunc("/load-tests", handler.CreateLoadTest).Methods("POST")
+	v1.HandleFunc("/load-tests", handler.ListLoadTests).Methods("GET")
+	v1.HandleFunc("/load-tests/{id}", handler.GetLoadTest).Methods("GET")
+	v1.HandleFunc("/load-tests/{id}", handler.UpdateLoadTest).Methods("PUT")
+	v1.HandleFunc("/load-tests/{id}", handler.DeleteLoadTest).Methods("DELETE")
 
-	// Visualization endpoints for charts and metrics
-	v1.HandleFunc("/tests/{id}/metrics/timeseries", visualizationHandler.GetTimeseriesChart).Methods("GET")
-	v1.HandleFunc("/tests/{id}/metrics/scatter", visualizationHandler.GetScatterPlot).Methods("GET")
-	v1.HandleFunc("/tests/{id}/metrics/aggregate", visualizationHandler.GetAggregatedStats).Methods("GET")
+	// LoadTestRun execution endpoints
+	v1.HandleFunc("/load-tests/{id}/runs", handler.CreateLoadTestRun).Methods("POST")
+	v1.HandleFunc("/load-tests/{id}/runs", handler.ListLoadTestRuns).Methods("GET")
+	v1.HandleFunc("/runs", handler.ListLoadTestRuns).Methods("GET")
+	v1.HandleFunc("/runs/{id}", handler.GetLoadTestRun).Methods("GET")
+	v1.HandleFunc("/runs/{id}/stop", handler.StopLoadTestRun).Methods("POST")
+
+	// Optimized visualization endpoints for dashboard UI
+	v1.HandleFunc("/runs/{id}/graph", visualizationHandler.GetRunGraph).Methods("GET")
+	v1.HandleFunc("/runs/{id}/summary", visualizationHandler.GetRunSummary).Methods("GET")
+	v1.HandleFunc("/runs/{id}/requests", visualizationHandler.GetLiveRequestLog).Methods("GET")
+
+	// Detailed visualization endpoints for charts and metrics
+	v1.HandleFunc("/runs/{id}/metrics/timeseries", visualizationHandler.GetTimeseriesChart).Methods("GET")
+	v1.HandleFunc("/runs/{id}/metrics/scatter", visualizationHandler.GetScatterPlot).Methods("GET")
+	v1.HandleFunc("/runs/{id}/metrics/aggregate", visualizationHandler.GetAggregatedStats).Methods("GET")
 
 	// Internal Locust callback endpoints
 	internal := v1.PathPrefix("/internal/locust").Subrouter()
