@@ -12,19 +12,21 @@ import (
 
 // Handler contains all HTTP handlers for the API
 type Handler struct {
-	orchestrator     *service.Orchestrator
-	loadTestStore    store.LoadTestRepository
-	loadTestRunStore store.LoadTestRunRepository
-	config           *config.Config
+	orchestrator         *service.Orchestrator
+	loadTestStore        store.LoadTestRepository
+	loadTestRunStore     store.LoadTestRunRepository
+	scriptRevisionStore  store.ScriptRevisionRepository
+	config               *config.Config
 }
 
 // NewHandler creates a new API handler
-func NewHandler(orchestrator *service.Orchestrator, loadTestStore store.LoadTestRepository, loadTestRunStore store.LoadTestRunRepository, config *config.Config) *Handler {
+func NewHandler(orchestrator *service.Orchestrator, loadTestStore store.LoadTestRepository, loadTestRunStore store.LoadTestRunRepository, scriptRevisionStore store.ScriptRevisionRepository, config *config.Config) *Handler {
 	return &Handler{
-		orchestrator:     orchestrator,
-		loadTestStore:    loadTestStore,
-		loadTestRunStore: loadTestRunStore,
-		config:           config,
+		orchestrator:        orchestrator,
+		loadTestStore:       loadTestStore,
+		loadTestRunStore:    loadTestRunStore,
+		scriptRevisionStore: scriptRevisionStore,
+		config:              config,
 	}
 }
 
@@ -56,25 +58,32 @@ func (h *Handler) LocustCallbackTestStart(w http.ResponseWriter, r *http.Request
 // LocustCallbackTestStop handles POST /v1/internal/locust/test-stop
 // Called by Locust when a test stops
 func (h *Handler) LocustCallbackTestStop(w http.ResponseWriter, r *http.Request) {
+	log.Printf("[API] Received test-stop callback from %s", r.RemoteAddr)
+	
 	var req LocustCallbackTestStopRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("[API] Failed to decode test-stop request: %v", err)
 		respondError(w, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 	
+	log.Printf("[API] Processing test-stop for runID: %s, autoStopped: %v", req.RunID, req.AutoStopped)
+	
 	if req.RunID == "" {
+		log.Printf("[API] test-stop request missing runId")
 		respondError(w, http.StatusBadRequest, "runId is required", nil)
 		return
 	}
 	
 	finalMetrics := toDomainMetricSnapshot(req.FinalMetrics)
 	
-	if err := h.orchestrator.HandleTestStop(req.RunID, finalMetrics); err != nil {
-		log.Printf("Error handling test stop callback: %v", err)
+	if err := h.orchestrator.HandleTestStop(req.RunID, finalMetrics, req.AutoStopped); err != nil {
+		log.Printf("[API] Error handling test stop callback for runID %s: %v", req.RunID, err)
 		respondError(w, http.StatusInternalServerError, "Failed to handle test stop", err)
 		return
 	}
 	
+	log.Printf("[API] Successfully processed test-stop for runID: %s", req.RunID)
 	respondJSON(w, http.StatusOK, SuccessResponse{Success: true})
 }
 

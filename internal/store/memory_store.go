@@ -288,7 +288,7 @@ func copyLoadTest(test *domain.LoadTest) *domain.LoadTest {
 		EnvID:              test.EnvID,
 		LocustClusterID:    test.LocustClusterID,
 		TargetURL:          test.TargetURL,
-		Locustfile:         test.Locustfile,
+		LatestRevisionID:   test.LatestRevisionID,
 		ScenarioID:         test.ScenarioID,
 		DefaultUsers:       test.DefaultUsers,
 		DefaultSpawnRate:   test.DefaultSpawnRate,
@@ -301,6 +301,11 @@ func copyLoadTest(test *domain.LoadTest) *domain.LoadTest {
 	if test.Tags != nil {
 		result.Tags = make([]string, len(test.Tags))
 		copy(result.Tags, test.Tags)
+	}
+	
+	if test.RecentRuns != nil {
+		result.RecentRuns = make([]domain.RecentRun, len(test.RecentRuns))
+		copy(result.RecentRuns, test.RecentRuns)
 	}
 	
 	if test.DefaultDurationSec != nil {
@@ -335,22 +340,23 @@ func copyLoadTestRun(run *domain.LoadTestRun) *domain.LoadTestRun {
 	}
 	
 	result := &domain.LoadTestRun{
-		ID:          run.ID,
-		LoadTestID:  run.LoadTestID,
-		Name:        run.Name,
-		AccountID:   run.AccountID,
-		OrgID:       run.OrgID,
-		ProjectID:   run.ProjectID,
-		EnvID:       run.EnvID,
-		TargetUsers: run.TargetUsers,
-		SpawnRate:   run.SpawnRate,
-		Status:      run.Status,
-		StartedAt:   run.StartedAt,
-		FinishedAt:  run.FinishedAt,
-		CreatedAt:   run.CreatedAt,
-		CreatedBy:   run.CreatedBy,
-		UpdatedAt:   run.UpdatedAt,
-		UpdatedBy:   run.UpdatedBy,
+		ID:               run.ID,
+		LoadTestID:       run.LoadTestID,
+		ScriptRevisionID: run.ScriptRevisionID,
+		Name:             run.Name,
+		AccountID:        run.AccountID,
+		OrgID:            run.OrgID,
+		ProjectID:        run.ProjectID,
+		EnvID:            run.EnvID,
+		TargetUsers:      run.TargetUsers,
+		SpawnRate:        run.SpawnRate,
+		Status:           run.Status,
+		StartedAt:        run.StartedAt,
+		FinishedAt:       run.FinishedAt,
+		CreatedAt:        run.CreatedAt,
+		CreatedBy:        run.CreatedBy,
+		UpdatedAt:        run.UpdatedAt,
+		UpdatedBy:        run.UpdatedBy,
 	}
 	
 	if run.DurationSeconds != nil {

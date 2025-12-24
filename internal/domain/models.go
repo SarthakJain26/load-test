@@ -7,7 +7,8 @@ const (
 	LoadTestRunStatusPending  LoadTestRunStatus = "Pending"
 	LoadTestRunStatusRunning  LoadTestRunStatus = "Running"
 	LoadTestRunStatusStopping LoadTestRunStatus = "Stopping"
-	LoadTestRunStatusFinished LoadTestRunStatus = "Finished"
+	LoadTestRunStatusStopped  LoadTestRunStatus = "Stopped"  // Manual stop
+	LoadTestRunStatusFinished LoadTestRunStatus = "Finished" // Auto-completed
 	LoadTestRunStatusFailed   LoadTestRunStatus = "Failed"
 )
 
@@ -20,6 +21,17 @@ type LocustCluster struct {
 	ProjectID string `json:"projectId"`
 	EnvID     string `json:"envId,omitempty"` // Optional environment
 	AuthToken string `json:"authToken"`       // Optional API key/token for Locust master
+}
+
+// ScriptRevision represents a version of a Locust test script
+type ScriptRevision struct {
+	ID             string `json:"id" bson:"id"`                                     // Unique revision ID
+	LoadTestID     string `json:"loadTestId" bson:"loadTestId"`                     // Reference to the LoadTest
+	RevisionNumber int    `json:"revisionNumber" bson:"revisionNumber"`             // Sequential revision number (1, 2, 3, ...)
+	ScriptContent  string `json:"scriptContent" bson:"scriptContent"`               // Base64 encoded Python script
+	Description    string `json:"description,omitempty" bson:"description,omitempty"` // Optional change description
+	CreatedAt      int64  `json:"createdAt" bson:"createdAt"`                       // Unix milliseconds
+	CreatedBy      string `json:"createdBy" bson:"createdBy"`
 }
 
 // RecentRun represents a summary of a recent LoadTestRun execution
@@ -48,7 +60,7 @@ type LoadTest struct {
 	EnvID           string         `json:"envId,omitempty"`     // Optional environment
 	LocustClusterID string         `json:"locustClusterId"`
 	TargetURL       string         `json:"targetUrl"`
-	Locustfile      string         `json:"locustfile"`          // Path or name of the locustfile
+	LatestRevisionID string        `json:"latestRevisionId,omitempty"` // Reference to the latest script revision
 	ScenarioID      string         `json:"scenarioId,omitempty"` // Optional scenario/tag within locustfile
 	// Default runtime parameters
 	DefaultUsers         int     `json:"defaultUsers,omitempty"`
@@ -67,13 +79,14 @@ type LoadTest struct {
 
 // LoadTestRun represents an actual execution of a load test
 type LoadTestRun struct {
-	ID         string `json:"id"`
-	LoadTestID string `json:"loadTestId"` // Reference to the LoadTest
-	Name       string `json:"name,omitempty"` // Optional run name
-	AccountID  string `json:"accountId"`
-	OrgID      string `json:"orgId"`
-	ProjectID  string `json:"projectId"`
-	EnvID      string `json:"envId,omitempty"` // Optional environment
+	ID               string `json:"id"`
+	LoadTestID       string `json:"loadTestId"` // Reference to the LoadTest
+	ScriptRevisionID string `json:"scriptRevisionId"` // Reference to the script revision used for this run
+	Name             string `json:"name,omitempty"` // Optional run name
+	AccountID        string `json:"accountId"`
+	OrgID            string `json:"orgId"`
+	ProjectID        string `json:"projectId"`
+	EnvID            string `json:"envId,omitempty"` // Optional environment
 	// Runtime parameters (can override LoadTest defaults)
 	TargetUsers     int     `json:"targetUsers"`
 	SpawnRate       float64 `json:"spawnRate"`

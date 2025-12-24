@@ -12,6 +12,8 @@ Environment variables required:
 - RUN_ID: The test run ID from the control plane
 - TENANT_ID: (Optional) Tenant identifier
 - ENV_ID: (Optional) Environment identifier
+- DURATION_SECONDS: (Optional) Test duration in seconds - test will auto-stop after this duration
+- METRICS_PUSH_INTERVAL: (Optional) Metrics push interval in seconds (default: 10)
 - TARGET_HOST: The target application to load test
 """
 
@@ -40,8 +42,13 @@ ENV_ID = os.getenv("ENV_ID", "")
 # Metrics push interval in seconds
 METRICS_PUSH_INTERVAL = int(os.getenv("METRICS_PUSH_INTERVAL", "10"))
 
-# Global greenlet reference for metrics pusher
+# Duration in seconds (if set, test will auto-stop after this duration)
+DURATION_SECONDS = os.getenv("DURATION_SECONDS", "")
+
+# Global greenlet references
 _metrics_greenlet: Optional[gevent.Greenlet] = None
+_duration_monitor_greenlet: Optional[gevent.Greenlet] = None
+_test_start_time: Optional[float] = None
 
 
 def _control_plane_headers():
@@ -62,7 +69,11 @@ def on_test_start(environment: Environment, **kwargs):
     """
     Event handler called when a load test starts.
     Notifies the control plane that the test has started.
+    Records the start time for duration monitoring.
     """
+    global _test_start_time
+    _test_start_time = time.time()
+    
     if not _is_control_plane_enabled():
         logger.warning("Control plane integration not configured, skipping test_start callback")
         return
@@ -96,13 +107,19 @@ def on_test_stop(environment: Environment, **kwargs):
     Event handler called when a load test stops.
     Notifies the control plane with final metrics.
     """
-    global _metrics_greenlet
+    global _metrics_greenlet, _duration_monitor_greenlet
     
     # Stop the metrics pusher greenlet
     if _metrics_greenlet is not None:
         logger.info("Stopping metrics pusher greenlet")
         gevent.kill(_metrics_greenlet)
         _metrics_greenlet = None
+    
+    # Stop the duration monitor greenlet
+    if _duration_monitor_greenlet is not None:
+        logger.info("Stopping duration monitor greenlet")
+        gevent.kill(_duration_monitor_greenlet)
+        _duration_monitor_greenlet = None
     
     if not _is_control_plane_enabled():
         logger.warning("Control plane integration not configured, skipping test_stop callback")
@@ -229,20 +246,55 @@ def _metrics_pusher(environment: Environment):
             logger.error(f"Error pushing metrics to control plane: {e}")
 
 
-@events.test_start.add_listener
-def start_metrics_greenlet(environment: Environment, **kwargs):
+def _duration_monitor(environment: Environment):
     """
-    Spawns a greenlet to periodically push metrics to the control plane.
-    This greenlet runs for the entire duration of the test.
+    Background task that monitors test duration and stops the test when duration elapses.
+    Runs in a greenlet for the duration of the test.
     """
-    global _metrics_greenlet
-    
-    if not _is_control_plane_enabled():
-        logger.warning("Control plane integration not configured, metrics pusher disabled")
+    if not DURATION_SECONDS:
+        logger.info("No duration limit set, duration monitor disabled")
         return
     
+    try:
+        duration = int(DURATION_SECONDS)
+        logger.info(f"Duration monitor started: will stop test after {duration} seconds")
+        
+        # Sleep until duration elapses
+        gevent.sleep(duration)
+        
+        # Stop the test
+        logger.info(f"Duration of {duration} seconds has elapsed, stopping test")
+        environment.runner.quit()
+        
+    except gevent.GreenletExit:
+        logger.info("Duration monitor greenlet killed")
+    except Exception as e:
+        logger.error(f"Error in duration monitor: {e}")
+
+
+@events.test_start.add_listener
+def start_background_greenlets(environment: Environment, **kwargs):
+    """
+    Spawns background greenlets:
+    - Metrics pusher: periodically pushes metrics to the control plane
+    - Duration monitor: stops test when duration elapses
+    """
+    global _metrics_greenlet, _duration_monitor_greenlet
+    
+    if not _is_control_plane_enabled():
+        logger.warning("Control plane integration not configured, background tasks disabled")
+        return
+    
+    # Start metrics pusher
     _metrics_greenlet = gevent.spawn(_metrics_pusher, environment)
     logger.info("Metrics pusher greenlet started")
+    
+    # Start duration monitor if duration is configured
+    if DURATION_SECONDS:
+        _duration_monitor_greenlet = gevent.spawn(_duration_monitor, environment)
+        logger.info("Duration monitor greenlet started")
+    else:
+        logger.info("No duration configured, test will run until manually stopped")
 
 
 # ============================================================================

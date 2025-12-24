@@ -16,8 +16,45 @@ import (
 	"syscall"
 	"time"
 
+	_ "Load-manager-cli/docs" // Import generated swagger docs
 	"github.com/gorilla/mux"
+	httpSwagger "github.com/swaggo/http-swagger"
 )
+
+// @title Load Manager API
+// @version 1.0
+// @description Load testing management platform for creating, executing, and monitoring distributed load tests with Locust.
+// @description
+// @description ## Features
+// @description - **Load Test Management**: Create and manage load tests with script versioning
+// @description - **Script Revisions**: Full version control for test scripts with audit trail
+// @description - **Test Execution**: Start and monitor load test runs with real-time metrics
+// @description - **Visualization**: Real-time dashboards and historical metrics
+// @description
+// @description ## Authentication
+// @description Currently, this API does not require authentication. Future versions will include API key or OAuth2 support.
+//
+// @contact.name API Support
+// @contact.email support@loadmanager.io
+//
+// @license.name Apache 2.0
+// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+//
+// @host localhost:8080
+// @BasePath /v1
+// @schemes http https
+//
+// @tag.name LoadTests
+// @tag.description Load test configuration and management
+//
+// @tag.name Scripts
+// @tag.description Script revision management with version control
+//
+// @tag.name Runs
+// @tag.description Load test run execution and monitoring
+//
+// @tag.name Visualization
+// @tag.description Real-time metrics and historical data visualization
 
 func main() {
 	// Parse command-line flags
@@ -72,13 +109,19 @@ func main() {
 	}
 	log.Println("Metrics time-series store initialized with indexes")
 
+	scriptRevisionStore, err := store.NewMongoScriptRevisionStore(mongoClient.Database())
+	if err != nil {
+		log.Fatalf("Failed to initialize script revision store: %v", err)
+	}
+	log.Println("Script revision store initialized with indexes")
+
 	// Initialize orchestrator
 	orchestrator := service.NewOrchestrator(cfg, loadTestStore, loadTestRunStore, metricsStore)
 	orchestrator.Start()
 	log.Println("Orchestrator started")
 
 	// Initialize API handlers
-	handler := api.NewHandler(orchestrator, loadTestStore, loadTestRunStore, cfg)
+	handler := api.NewHandler(orchestrator, loadTestStore, loadTestRunStore, scriptRevisionStore, cfg)
 	visualizationHandler := api.NewVisualizationHandler(loadTestRunStore, metricsStore)
 
 	// Setup router
@@ -147,6 +190,12 @@ func setupRouter(handler *api.Handler, visualizationHandler *api.VisualizationHa
 	v1.HandleFunc("/load-tests/{id}", handler.UpdateLoadTest).Methods("PUT")
 	v1.HandleFunc("/load-tests/{id}", handler.DeleteLoadTest).Methods("DELETE")
 
+	// Script management endpoints
+	v1.HandleFunc("/load-tests/{id}/script", handler.UpdateScript).Methods("PUT")
+	v1.HandleFunc("/load-tests/{id}/script", handler.GetScript).Methods("GET")
+	v1.HandleFunc("/load-tests/{id}/script/revisions", handler.ListScriptRevisions).Methods("GET")
+	v1.HandleFunc("/load-tests/{id}/script/revisions/{revisionId}", handler.GetScriptRevision).Methods("GET")
+
 	// LoadTestRun execution endpoints
 	v1.HandleFunc("/load-tests/{id}/runs", handler.CreateLoadTestRun).Methods("POST")
 	v1.HandleFunc("/load-tests/{id}/runs", handler.ListLoadTestRuns).Methods("GET")
@@ -163,6 +212,9 @@ func setupRouter(handler *api.Handler, visualizationHandler *api.VisualizationHa
 	v1.HandleFunc("/runs/{id}/metrics/timeseries", visualizationHandler.GetTimeseriesChart).Methods("GET")
 	v1.HandleFunc("/runs/{id}/metrics/scatter", visualizationHandler.GetScatterPlot).Methods("GET")
 	v1.HandleFunc("/runs/{id}/metrics/aggregate", visualizationHandler.GetAggregatedStats).Methods("GET")
+
+	// Swagger documentation
+	router.PathPrefix("/swagger/").Handler(httpSwagger.WrapHandler)
 
 	// Internal Locust callback endpoints
 	internal := v1.PathPrefix("/internal/locust").Subrouter()
@@ -183,12 +235,3 @@ func setupRouter(handler *api.Handler, visualizationHandler *api.VisualizationHa
 
 	return router
 }
-
-// Delegate 1.0
-// Dependencies
-// Docker, Cannot run on user's system
-// Don't work on VMs (don't run on containerless)
-
-// Delegate 2.0
-// Dependencies
-// None

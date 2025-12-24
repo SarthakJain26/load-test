@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"Load-manager-cli/internal/domain"
@@ -295,15 +296,22 @@ func (s *MongoLoadTestRunStore) Update(run *domain.LoadTestRun) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	
+	log.Printf("[MongoStore] Updating test run %s with status: %s", run.ID, run.Status)
+	
 	filter := bson.M{"id": run.ID}
 	update := bson.M{"$set": run}
 	
 	result, err := s.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
+		log.Printf("[MongoStore] Update failed for run %s: %v", run.ID, err)
 		return fmt.Errorf("failed to update load test run: %w", err)
 	}
 	
+	log.Printf("[MongoStore] Update result for run %s: MatchedCount=%d, ModifiedCount=%d", 
+		run.ID, result.MatchedCount, result.ModifiedCount)
+	
 	if result.MatchedCount == 0 {
+		log.Printf("[MongoStore] No document matched for run %s", run.ID)
 		return fmt.Errorf("load test run not found: %s", run.ID)
 	}
 	

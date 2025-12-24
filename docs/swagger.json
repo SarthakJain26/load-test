@@ -1,0 +1,1657 @@
+{
+    "schemes": [
+        "http",
+        "https"
+    ],
+    "swagger": "2.0",
+    "info": {
+        "description": "Load testing management platform for creating, executing, and monitoring distributed load tests with Locust.\n\n## Features\n- **Load Test Management**: Create and manage load tests with script versioning\n- **Script Revisions**: Full version control for test scripts with audit trail\n- **Test Execution**: Start and monitor load test runs with real-time metrics\n- **Visualization**: Real-time dashboards and historical metrics\n\n## Authentication\nCurrently, this API does not require authentication. Future versions will include API key or OAuth2 support.",
+        "title": "Load Manager API",
+        "contact": {
+            "name": "API Support",
+            "email": "support@loadmanager.io"
+        },
+        "license": {
+            "name": "Apache 2.0",
+            "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+        },
+        "version": "1.0"
+    },
+    "host": "localhost:8080",
+    "basePath": "/v1",
+    "paths": {
+        "/load-tests": {
+            "get": {
+                "description": "Returns a list of all load test configurations",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "LoadTests"
+                ],
+                "summary": "List all load tests",
+                "responses": {
+                    "200": {
+                        "description": "List of load tests",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/internal_api.LoadTestResponse"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to list load tests",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Creates a new load test configuration with an initial script revision",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "LoadTests"
+                ],
+                "summary": "Create a new load test",
+                "parameters": [
+                    {
+                        "description": "Load test configuration with base64 encoded script",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.CreateLoadTestRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Load test created successfully",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.LoadTestResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to create load test",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/load-tests/{id}": {
+            "get": {
+                "description": "Retrieves a specific load test configuration by its ID",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "LoadTests"
+                ],
+                "summary": "Get load test by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Load Test ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Load test details",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.LoadTestResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Load test not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "Updates an existing load test configuration (excluding script)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "LoadTests"
+                ],
+                "summary": "Update load test configuration",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Load Test ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Updated load test configuration",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.UpdateLoadTestRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Load test updated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.LoadTestResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Load test not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to update load test",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Deletes a load test configuration and all its associated data",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "LoadTests"
+                ],
+                "summary": "Delete a load test",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Load Test ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Load test deleted successfully",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.SuccessResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to delete load test",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/load-tests/{id}/runs": {
+            "post": {
+                "description": "Creates and starts a new load test run using the latest script revision",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Runs"
+                ],
+                "summary": "Start a new load test run",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Load Test ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Test run configuration",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.CreateLoadTestRunRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Load test run started successfully",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.LoadTestRunResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or validation error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Load test not found or no script available",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to start load test run",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/load-tests/{id}/script": {
+            "get": {
+                "description": "Returns the latest script revision for the load test",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Scripts"
+                ],
+                "summary": "Get latest script",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Load Test ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Latest script revision",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ScriptRevisionResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Script not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "Creates a new script revision for the load test with base64 encoded content",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Scripts"
+                ],
+                "summary": "Update load test script",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Load Test ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Script content (base64) and description",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.UpdateScriptRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Script revision created successfully",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ScriptRevisionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Load test not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to create script revision",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/load-tests/{id}/script/revisions": {
+            "get": {
+                "description": "Returns all script revisions for a load test (most recent first)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Scripts"
+                ],
+                "summary": "List script revision history",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Load Test ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "Maximum number of revisions to return",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of script revisions",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/internal_api.ScriptRevisionResponse"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to list script revisions",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/load-tests/{id}/script/revisions/{revisionId}": {
+            "get": {
+                "description": "Returns a specific script revision by its ID",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Scripts"
+                ],
+                "summary": "Get specific script revision",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Load Test ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Revision ID",
+                        "name": "revisionId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Script revision details",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ScriptRevisionResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Script revision not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/runs": {
+            "get": {
+                "description": "Returns a list of load test runs, optionally filtered by load test ID or other criteria",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Runs"
+                ],
+                "summary": "List load test runs",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Load Test ID (when using /load-tests/{id}/runs endpoint)",
+                        "name": "id",
+                        "in": "path"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by account ID",
+                        "name": "accountId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by organization ID",
+                        "name": "orgId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by project ID",
+                        "name": "projectId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by status (Pending, Running, Finished, Failed, Stopped)",
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of load test runs",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/internal_api.LoadTestRunResponse"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to list load test runs",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/runs/{id}": {
+            "get": {
+                "description": "Retrieves details and current status of a specific load test run",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Runs"
+                ],
+                "summary": "Get load test run details",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Load Test Run ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Load test run details",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.LoadTestRunResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Load test run not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/runs/{id}/graph": {
+            "get": {
+                "description": "Returns minimal graph data optimized for dashboard charts (RPS and response time over time)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Visualization"
+                ],
+                "summary": "Get run graph data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Load Test Run ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start time in RFC3339 format",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End time in RFC3339 format",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Graph data for visualization",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.RunGraphResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Load test run not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to fetch graph data",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/runs/{id}/metrics/aggregate": {
+            "get": {
+                "description": "Returns aggregated statistics for overall performance analysis",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Visualization"
+                ],
+                "summary": "Get aggregated statistics",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Load Test Run ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start time in RFC3339 format",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End time in RFC3339 format",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Aggregated statistics",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.VisualizationSummaryResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Load test run not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to fetch aggregated stats",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/runs/{id}/metrics/scatter": {
+            "get": {
+                "description": "Returns scatter plot data for response time distribution analysis",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Visualization"
+                ],
+                "summary": "Get scatter plot data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Load Test Run ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start time in RFC3339 format",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End time in RFC3339 format",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Scatter plot data points",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ScatterPlotResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Load test run not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to fetch scatter plot data",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/runs/{id}/metrics/timeseries": {
+            "get": {
+                "description": "Returns comprehensive timeseries data for detailed charts and analysis",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Visualization"
+                ],
+                "summary": "Get detailed timeseries metrics",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Load Test Run ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start time in RFC3339 format",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End time in RFC3339 format",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Detailed timeseries metrics",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.TimeseriesChartResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Load test run not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to fetch timeseries data",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/runs/{id}/requests": {
+            "get": {
+                "description": "Returns endpoint statistics in a log-like format showing performance per endpoint",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Visualization"
+                ],
+                "summary": "Get live request statistics",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Load Test Run ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 100,
+                        "description": "Maximum number of entries to return",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of request statistics per endpoint",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/internal_api.RequestLogEntry"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Load test run not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to fetch request log",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/runs/{id}/stop": {
+            "post": {
+                "description": "Stops a currently running load test run",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Runs"
+                ],
+                "summary": "Stop a running load test",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Load Test Run ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Load test run stopped successfully",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.SuccessResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Load test run not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to stop load test run",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/runs/{id}/summary": {
+            "get": {
+                "description": "Returns the 4 key metrics for dashboard cards (total requests, RPS, avg response time, error rate)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Visualization"
+                ],
+                "summary": "Get run summary metrics",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Load Test Run ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Summary metrics",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.RunSummaryResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Load test run not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to fetch summary",
+                        "schema": {
+                            "$ref": "#/definitions/internal_api.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "internal_api.AggregatedSummary": {
+            "type": "object",
+            "properties": {
+                "avgP50Latency": {
+                    "type": "number"
+                },
+                "avgP95Latency": {
+                    "type": "number"
+                },
+                "avgP99Latency": {
+                    "type": "number"
+                },
+                "avgRps": {
+                    "type": "number"
+                },
+                "dataPoints": {
+                    "type": "integer"
+                },
+                "duration": {
+                    "type": "string"
+                },
+                "maxP95Latency": {
+                    "type": "number"
+                },
+                "maxRps": {
+                    "type": "number"
+                },
+                "minRps": {
+                    "type": "number"
+                },
+                "overallErrorRate": {
+                    "type": "number"
+                },
+                "totalFailures": {
+                    "type": "integer"
+                },
+                "totalRequests": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_api.CreateLoadTestRequest": {
+            "type": "object",
+            "required": [
+                "accountId",
+                "createdBy",
+                "locustClusterId",
+                "name",
+                "orgId",
+                "projectId",
+                "scriptContent",
+                "targetUrl"
+            ],
+            "properties": {
+                "accountId": {
+                    "type": "string"
+                },
+                "createdBy": {
+                    "type": "string"
+                },
+                "defaultDurationSec": {
+                    "type": "integer"
+                },
+                "defaultSpawnRate": {
+                    "type": "number"
+                },
+                "defaultUsers": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "envId": {
+                    "type": "string"
+                },
+                "locustClusterId": {
+                    "type": "string"
+                },
+                "maxDurationSec": {
+                    "type": "integer"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "name": {
+                    "type": "string"
+                },
+                "orgId": {
+                    "type": "string"
+                },
+                "projectId": {
+                    "type": "string"
+                },
+                "scenarioId": {
+                    "type": "string"
+                },
+                "scriptContent": {
+                    "description": "Base64 encoded Python script",
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "targetUrl": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.CreateLoadTestRunRequest": {
+            "type": "object",
+            "required": [
+                "createdBy",
+                "loadTestId"
+            ],
+            "properties": {
+                "createdBy": {
+                    "type": "string"
+                },
+                "durationSeconds": {
+                    "description": "Override from LoadTest",
+                    "type": "integer"
+                },
+                "loadTestId": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "name": {
+                    "type": "string"
+                },
+                "spawnRate": {
+                    "description": "Override from LoadTest",
+                    "type": "number"
+                },
+                "targetUsers": {
+                    "description": "Override from LoadTest",
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_api.EndpointStatsResponse": {
+            "type": "object",
+            "properties": {
+                "avgResponseTimeMs": {
+                    "type": "number"
+                },
+                "avgRps": {
+                    "type": "number"
+                },
+                "endpoint": {
+                    "type": "string"
+                },
+                "errorRate": {
+                    "type": "number"
+                },
+                "maxResponseTimeMs": {
+                    "type": "number"
+                },
+                "method": {
+                    "type": "string"
+                },
+                "minResponseTimeMs": {
+                    "type": "number"
+                },
+                "p50ResponseMs": {
+                    "type": "number"
+                },
+                "p95ResponseMs": {
+                    "type": "number"
+                },
+                "totalFailures": {
+                    "type": "integer"
+                },
+                "totalRequests": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_api.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.GraphDataPoint": {
+            "type": "object",
+            "properties": {
+                "avgResponseTime": {
+                    "description": "Average response time in seconds",
+                    "type": "number"
+                },
+                "errorsPerSec": {
+                    "description": "Errors per second",
+                    "type": "number"
+                },
+                "requestsPerSec": {
+                    "description": "RPS",
+                    "type": "number"
+                },
+                "timestamp": {
+                    "description": "Unix milliseconds",
+                    "type": "integer"
+                },
+                "users": {
+                    "description": "Current active users",
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_api.LoadTestResponse": {
+            "type": "object",
+            "properties": {
+                "accountId": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "createdBy": {
+                    "type": "string"
+                },
+                "defaultDurationSec": {
+                    "type": "integer"
+                },
+                "defaultSpawnRate": {
+                    "type": "number"
+                },
+                "defaultUsers": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "envId": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "latestRevisionId": {
+                    "type": "string"
+                },
+                "locustClusterId": {
+                    "type": "string"
+                },
+                "maxDurationSec": {
+                    "type": "integer"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "name": {
+                    "type": "string"
+                },
+                "orgId": {
+                    "type": "string"
+                },
+                "projectId": {
+                    "type": "string"
+                },
+                "scenarioId": {
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "targetUrl": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "updatedBy": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.LoadTestRunResponse": {
+            "type": "object",
+            "properties": {
+                "accountId": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "createdBy": {
+                    "type": "string"
+                },
+                "durationSeconds": {
+                    "type": "integer"
+                },
+                "envId": {
+                    "type": "string"
+                },
+                "finishedAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "lastMetrics": {
+                    "$ref": "#/definitions/internal_api.MetricSnapshotResponse"
+                },
+                "loadTestId": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "name": {
+                    "type": "string"
+                },
+                "orgId": {
+                    "type": "string"
+                },
+                "projectId": {
+                    "type": "string"
+                },
+                "spawnRate": {
+                    "type": "number"
+                },
+                "startedAt": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "targetUsers": {
+                    "type": "integer"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "updatedBy": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.MetricSnapshotResponse": {
+            "type": "object",
+            "properties": {
+                "avgResponseMs": {
+                    "type": "number"
+                },
+                "currentUsers": {
+                    "type": "integer"
+                },
+                "errorRate": {
+                    "type": "number"
+                },
+                "p50ResponseMs": {
+                    "type": "number"
+                },
+                "p95ResponseMs": {
+                    "type": "number"
+                },
+                "p99ResponseMs": {
+                    "type": "number"
+                },
+                "requestStats": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/internal_api.ReqStatResponse"
+                    }
+                },
+                "timestamp": {
+                    "type": "string"
+                },
+                "totalFailures": {
+                    "type": "integer"
+                },
+                "totalRequests": {
+                    "type": "integer"
+                },
+                "totalRps": {
+                    "type": "number"
+                }
+            }
+        },
+        "internal_api.ReqStatResponse": {
+            "type": "object",
+            "properties": {
+                "avgResponseTime": {
+                    "type": "number"
+                },
+                "maxResponseTime": {
+                    "type": "number"
+                },
+                "medianResponseTime": {
+                    "type": "number"
+                },
+                "method": {
+                    "type": "string"
+                },
+                "minResponseTime": {
+                    "type": "number"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "numFailures": {
+                    "type": "integer"
+                },
+                "numRequests": {
+                    "type": "integer"
+                },
+                "requestsPerSec": {
+                    "type": "number"
+                }
+            }
+        },
+        "internal_api.RequestLogEntry": {
+            "type": "object",
+            "properties": {
+                "requestType": {
+                    "description": "GET, POST, etc.",
+                    "type": "string"
+                },
+                "responseLength": {
+                    "type": "integer"
+                },
+                "responseTime": {
+                    "description": "In milliseconds",
+                    "type": "number"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "timestamp": {
+                    "description": "Unix milliseconds",
+                    "type": "integer"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.RunGraphResponse": {
+            "type": "object",
+            "properties": {
+                "dataPoints": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_api.GraphDataPoint"
+                    }
+                },
+                "runId": {
+                    "type": "string"
+                },
+                "runName": {
+                    "type": "string"
+                },
+                "startedAt": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.RunSummaryResponse": {
+            "type": "object",
+            "properties": {
+                "avgResponseTime": {
+                    "description": "In seconds",
+                    "type": "number"
+                },
+                "duration": {
+                    "type": "string"
+                },
+                "durationSeconds": {
+                    "type": "integer"
+                },
+                "errorRate": {
+                    "description": "Percentage",
+                    "type": "number"
+                },
+                "finishedAt": {
+                    "type": "string"
+                },
+                "requestsPerSec": {
+                    "type": "number"
+                },
+                "runId": {
+                    "type": "string"
+                },
+                "runName": {
+                    "type": "string"
+                },
+                "spawnRate": {
+                    "type": "number"
+                },
+                "startedAt": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "targetUsers": {
+                    "description": "Test configuration",
+                    "type": "integer"
+                },
+                "totalRequests": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_api.ScatterDataPoint": {
+            "type": "object",
+            "properties": {
+                "endpoint": {
+                    "type": "string"
+                },
+                "method": {
+                    "type": "string"
+                },
+                "responseTimeMs": {
+                    "type": "number"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "timestamp": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.ScatterPlotResponse": {
+            "type": "object",
+            "properties": {
+                "dataPoints": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_api.ScatterDataPoint"
+                    }
+                },
+                "endpoints": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "testRunId": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.ScriptRevisionResponse": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "createdBy": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "loadTestId": {
+                    "type": "string"
+                },
+                "revisionNumber": {
+                    "type": "integer"
+                },
+                "scriptContent": {
+                    "description": "Base64 encoded Python script",
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.SuccessResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "internal_api.TimeseriesChartResponse": {
+            "type": "object",
+            "properties": {
+                "dataPoints": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_api.TimeseriesDataPoint"
+                    }
+                },
+                "summary": {
+                    "$ref": "#/definitions/internal_api.AggregatedSummary"
+                },
+                "testRunId": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.TimeseriesDataPoint": {
+            "type": "object",
+            "properties": {
+                "currentUsers": {
+                    "type": "integer"
+                },
+                "errorRate": {
+                    "type": "number"
+                },
+                "p50ResponseMs": {
+                    "type": "number"
+                },
+                "p95ResponseMs": {
+                    "type": "number"
+                },
+                "p99ResponseMs": {
+                    "type": "number"
+                },
+                "timestamp": {
+                    "type": "string"
+                },
+                "totalRps": {
+                    "type": "number"
+                }
+            }
+        },
+        "internal_api.UpdateLoadTestRequest": {
+            "type": "object",
+            "required": [
+                "updatedBy"
+            ],
+            "properties": {
+                "defaultDurationSec": {
+                    "type": "integer"
+                },
+                "defaultSpawnRate": {
+                    "type": "number"
+                },
+                "defaultUsers": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "maxDurationSec": {
+                    "type": "integer"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "name": {
+                    "type": "string"
+                },
+                "scenarioId": {
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "targetUrl": {
+                    "type": "string"
+                },
+                "updatedBy": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.UpdateScriptRequest": {
+            "type": "object",
+            "required": [
+                "scriptContent",
+                "updatedBy"
+            ],
+            "properties": {
+                "description": {
+                    "description": "Optional change description",
+                    "type": "string"
+                },
+                "scriptContent": {
+                    "description": "Base64 encoded Python script",
+                    "type": "string"
+                },
+                "updatedBy": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_api.VisualizationSummaryResponse": {
+            "type": "object",
+            "properties": {
+                "endpointStats": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_api.EndpointStatsResponse"
+                    }
+                },
+                "status": {
+                    "type": "string"
+                },
+                "summary": {
+                    "$ref": "#/definitions/internal_api.AggregatedSummary"
+                },
+                "testRunId": {
+                    "type": "string"
+                },
+                "timeseries": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_api.TimeseriesDataPoint"
+                    }
+                }
+            }
+        }
+    },
+    "tags": [
+        {
+            "description": "Load test configuration and management",
+            "name": "LoadTests"
+        },
+        {
+            "description": "Script revision management with version control",
+            "name": "Scripts"
+        },
+        {
+            "description": "Load test run execution and monitoring",
+            "name": "Runs"
+        },
+        {
+            "description": "Real-time metrics and historical data visualization",
+            "name": "Visualization"
+        }
+    ]
+}

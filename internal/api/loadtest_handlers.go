@@ -1,6 +1,7 @@
 package api
 
 import (
+	"Load-manager-cli/internal/service"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -13,7 +14,17 @@ import (
 
 // LoadTest handlers
 
-// CreateLoadTest handles POST /v1/load-tests
+// CreateLoadTest godoc
+// @Summary Create a new load test
+// @Description Creates a new load test configuration with an initial script revision
+// @Tags LoadTests
+// @Accept json
+// @Produce json
+// @Param request body CreateLoadTestRequest true "Load test configuration with base64 encoded script"
+// @Success 201 {object} LoadTestResponse "Load test created successfully"
+// @Failure 400 {object} ErrorResponse "Invalid request body"
+// @Failure 500 {object} ErrorResponse "Failed to create load test"
+// @Router /load-tests [post]
 func (h *Handler) CreateLoadTest(w http.ResponseWriter, r *http.Request) {
 	var req CreateLoadTestRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -22,8 +33,28 @@ func (h *Handler) CreateLoadTest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	nowMillis := time.Now().UnixMilli()
+	testID := uuid.New().String()
+	
+	// Create initial script revision
+	revisionID := uuid.New().String()
+	revision := &domain.ScriptRevision{
+		ID:             revisionID,
+		LoadTestID:     testID,
+		RevisionNumber: 1,
+		ScriptContent:  req.ScriptContent,
+		Description:    "Initial version",
+		CreatedAt:      nowMillis,
+		CreatedBy:      req.CreatedBy,
+	}
+	
+	if err := h.scriptRevisionStore.Create(revision); err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to create script revision", err)
+		return
+	}
+	
+	// Create load test with reference to the revision
 	test := &domain.LoadTest{
-		ID:                 uuid.New().String(),
+		ID:                 testID,
 		Name:               req.Name,
 		Description:        req.Description,
 		Tags:               req.Tags,
@@ -33,7 +64,7 @@ func (h *Handler) CreateLoadTest(w http.ResponseWriter, r *http.Request) {
 		EnvID:              req.EnvID,
 		LocustClusterID:    req.LocustClusterID,
 		TargetURL:          req.TargetURL,
-		Locustfile:         req.Locustfile,
+		LatestRevisionID:   revisionID,
 		ScenarioID:         req.ScenarioID,
 		DefaultUsers:       req.DefaultUsers,
 		DefaultSpawnRate:   req.DefaultSpawnRate,
@@ -55,7 +86,15 @@ func (h *Handler) CreateLoadTest(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusCreated, toLoadTestResponse(test))
 }
 
-// GetLoadTest handles GET /v1/load-tests/{id}
+// GetLoadTest godoc
+// @Summary Get load test by ID
+// @Description Retrieves a specific load test configuration by its ID
+// @Tags LoadTests
+// @Produce json
+// @Param id path string true "Load Test ID"
+// @Success 200 {object} LoadTestResponse "Load test details"
+// @Failure 404 {object} ErrorResponse "Load test not found"
+// @Router /load-tests/{id} [get]
 func (h *Handler) GetLoadTest(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	testID := vars["id"]
@@ -69,7 +108,14 @@ func (h *Handler) GetLoadTest(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, toLoadTestResponse(test))
 }
 
-// ListLoadTests handles GET /v1/load-tests
+// ListLoadTests godoc
+// @Summary List all load tests
+// @Description Returns a list of all load test configurations
+// @Tags LoadTests
+// @Produce json
+// @Success 200 {array} LoadTestResponse "List of load tests"
+// @Failure 500 {object} ErrorResponse "Failed to list load tests"
+// @Router /load-tests [get]
 func (h *Handler) ListLoadTests(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	filter := &store.LoadTestFilter{}
@@ -108,7 +154,19 @@ func (h *Handler) ListLoadTests(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, responses)
 }
 
-// UpdateLoadTest handles PUT /v1/load-tests/{id}
+// UpdateLoadTest godoc
+// @Summary Update load test configuration
+// @Description Updates an existing load test configuration (excluding script)
+// @Tags LoadTests
+// @Accept json
+// @Produce json
+// @Param id path string true "Load Test ID"
+// @Param request body UpdateLoadTestRequest true "Updated load test configuration"
+// @Success 200 {object} LoadTestResponse "Load test updated successfully"
+// @Failure 400 {object} ErrorResponse "Invalid request body"
+// @Failure 404 {object} ErrorResponse "Load test not found"
+// @Failure 500 {object} ErrorResponse "Failed to update load test"
+// @Router /load-tests/{id} [put]
 func (h *Handler) UpdateLoadTest(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	testID := vars["id"]
@@ -137,9 +195,6 @@ func (h *Handler) UpdateLoadTest(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.TargetURL != "" {
 		test.TargetURL = req.TargetURL
-	}
-	if req.Locustfile != "" {
-		test.Locustfile = req.Locustfile
 	}
 	if req.ScenarioID != "" {
 		test.ScenarioID = req.ScenarioID
@@ -171,7 +226,15 @@ func (h *Handler) UpdateLoadTest(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, toLoadTestResponse(test))
 }
 
-// DeleteLoadTest handles DELETE /v1/load-tests/{id}
+// DeleteLoadTest godoc
+// @Summary Delete a load test
+// @Description Deletes a load test configuration and all its associated data
+// @Tags LoadTests
+// @Produce json
+// @Param id path string true "Load Test ID"
+// @Success 200 {object} SuccessResponse "Load test deleted successfully"
+// @Failure 500 {object} ErrorResponse "Failed to delete load test"
+// @Router /load-tests/{id} [delete]
 func (h *Handler) DeleteLoadTest(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	testID := vars["id"]
@@ -189,7 +252,19 @@ func (h *Handler) DeleteLoadTest(w http.ResponseWriter, r *http.Request) {
 
 // LoadTestRun handlers
 
-// CreateLoadTestRun handles POST /v1/load-tests/{id}/runs
+// CreateLoadTestRun godoc
+// @Summary Start a new load test run
+// @Description Creates and starts a new load test run using the latest script revision
+// @Tags Runs
+// @Accept json
+// @Produce json
+// @Param id path string true "Load Test ID"
+// @Param request body CreateLoadTestRunRequest true "Test run configuration"
+// @Success 201 {object} LoadTestRunResponse "Load test run started successfully"
+// @Failure 400 {object} ErrorResponse "Invalid request or validation error"
+// @Failure 404 {object} ErrorResponse "Load test not found or no script available"
+// @Failure 500 {object} ErrorResponse "Failed to start load test run"
+// @Router /load-tests/{id}/runs [post]
 func (h *Handler) CreateLoadTestRun(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	loadTestID := vars["id"]
@@ -231,24 +306,33 @@ func (h *Handler) CreateLoadTestRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get the latest script revision
+	latestRevision, err := h.scriptRevisionStore.GetLatestByLoadTestID(loadTestID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "No script found for this load test", err)
+		return
+	}
+
 	nowMillis := time.Now().UnixMilli()
+	runID := uuid.New().String()
 	run := &domain.LoadTestRun{
-		ID:              uuid.New().String(),
-		LoadTestID:      loadTestID,
-		Name:            req.Name,
-		AccountID:       loadTest.AccountID,
-		OrgID:           loadTest.OrgID,
-		ProjectID:       loadTest.ProjectID,
-		EnvID:           loadTest.EnvID,
-		TargetUsers:     targetUsers,
-		SpawnRate:       spawnRate,
-		DurationSeconds: durationSeconds,
-		Status:          domain.LoadTestRunStatusPending,
-		CreatedAt:       nowMillis,
-		CreatedBy:       req.CreatedBy,
-		UpdatedAt:       nowMillis,
-		UpdatedBy:       req.CreatedBy,
-		Metadata:        req.Metadata,
+		ID:               runID,
+		LoadTestID:       loadTestID,
+		ScriptRevisionID: latestRevision.ID,
+		Name:             req.Name,
+		AccountID:        loadTest.AccountID,
+		OrgID:            loadTest.OrgID,
+		ProjectID:        loadTest.ProjectID,
+		EnvID:            loadTest.EnvID,
+		TargetUsers:      targetUsers,
+		SpawnRate:        spawnRate,
+		DurationSeconds:  durationSeconds,
+		Status:           domain.LoadTestRunStatusPending,
+		CreatedAt:        nowMillis,
+		CreatedBy:        req.CreatedBy,
+		UpdatedAt:        nowMillis,
+		UpdatedBy:        req.CreatedBy,
+		Metadata:         req.Metadata,
 	}
 
 	if err := h.loadTestRunStore.Create(run); err != nil {
@@ -256,13 +340,43 @@ func (h *Handler) CreateLoadTestRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Start the actual test via orchestrator
-	// h.orchestrator.StartLoadTestRun(run, loadTest)
+	// Start the actual test via orchestrator
+	startReq := &service.CreateTestRunRequest{
+		LoadTestRunID:   runID,
+		AccountID:       loadTest.AccountID,
+		OrgID:           loadTest.OrgID,
+		ProjectID:       loadTest.ProjectID,
+		EnvID:           loadTest.EnvID,
+		ScriptContent:   latestRevision.ScriptContent, // Base64 encoded script
+		TargetURL:       loadTest.TargetURL,
+		TargetUsers:     targetUsers,
+		SpawnRate:       spawnRate,
+		DurationSeconds: durationSeconds,
+	}
 
-	respondJSON(w, http.StatusCreated, toLoadTestRunResponse(run))
+	startedRun, err := h.orchestrator.CreateTestRun(startReq)
+	if err != nil {
+		// Test creation failed, update run status to Failed
+		run.Status = domain.LoadTestRunStatusFailed
+		run.UpdatedAt = time.Now().UnixMilli()
+		h.loadTestRunStore.Update(run)
+		
+		respondError(w, http.StatusInternalServerError, "Failed to start load test", err)
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, toLoadTestRunResponse(startedRun))
 }
 
-// GetLoadTestRun handles GET /v1/runs/{id}
+// GetLoadTestRun godoc
+// @Summary Get load test run details
+// @Description Retrieves details and current status of a specific load test run
+// @Tags Runs
+// @Produce json
+// @Param id path string true "Load Test Run ID"
+// @Success 200 {object} LoadTestRunResponse "Load test run details"
+// @Failure 404 {object} ErrorResponse "Load test run not found"
+// @Router /runs/{id} [get]
 func (h *Handler) GetLoadTestRun(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	runID := vars["id"]
@@ -276,7 +390,19 @@ func (h *Handler) GetLoadTestRun(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, toLoadTestRunResponse(run))
 }
 
-// ListLoadTestRuns handles GET /v1/load-tests/{id}/runs and GET /v1/runs
+// ListLoadTestRuns godoc
+// @Summary List load test runs
+// @Description Returns a list of load test runs, optionally filtered by load test ID or other criteria
+// @Tags Runs
+// @Produce json
+// @Param id path string false "Load Test ID (when using /load-tests/{id}/runs endpoint)"
+// @Param accountId query string false "Filter by account ID"
+// @Param orgId query string false "Filter by organization ID"
+// @Param projectId query string false "Filter by project ID"
+// @Param status query string false "Filter by status (Pending, Running, Finished, Failed, Stopped)"
+// @Success 200 {array} LoadTestRunResponse "List of load test runs"
+// @Failure 500 {object} ErrorResponse "Failed to list load test runs"
+// @Router /runs [get]
 func (h *Handler) ListLoadTestRuns(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	query := r.URL.Query()
@@ -323,7 +449,16 @@ func (h *Handler) ListLoadTestRuns(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, responses)
 }
 
-// StopLoadTestRun handles POST /v1/runs/{id}/stop
+// StopLoadTestRun godoc
+// @Summary Stop a running load test
+// @Description Stops a currently running load test run
+// @Tags Runs
+// @Produce json
+// @Param id path string true "Load Test Run ID"
+// @Success 200 {object} SuccessResponse "Load test run stopped successfully"
+// @Failure 404 {object} ErrorResponse "Load test run not found"
+// @Failure 500 {object} ErrorResponse "Failed to stop load test run"
+// @Router /runs/{id}/stop [post]
 func (h *Handler) StopLoadTestRun(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	runID := vars["id"]

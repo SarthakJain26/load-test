@@ -44,9 +44,10 @@ type SecurityConfig struct {
 }
 
 // OrchestratorConfig holds orchestrator behavior configuration
+// Note: Metrics collection is now push-based (Locust sends metrics to control plane)
 type OrchestratorConfig struct {
-	// Interval in seconds to poll Locust for metrics
-	MetricsPollIntervalSeconds int `yaml:"metricsPollIntervalSeconds" json:"metricsPollIntervalSeconds"`
+	// Deprecated: No longer used - metrics are pushed from Locust
+	MetricsPollIntervalSeconds int `yaml:"metricsPollIntervalSeconds,omitempty" json:"metricsPollIntervalSeconds,omitempty"`
 }
 
 // MongoDBConfig holds MongoDB connection configuration
@@ -80,9 +81,7 @@ func LoadFromFile(path string) (*Config, error) {
 	if cfg.Server.Port == 0 {
 		cfg.Server.Port = 8080
 	}
-	if cfg.Orchestrator.MetricsPollIntervalSeconds == 0 {
-		cfg.Orchestrator.MetricsPollIntervalSeconds = 10
-	}
+	// MetricsPollIntervalSeconds is deprecated - no longer used
 
 	return &cfg, nil
 }

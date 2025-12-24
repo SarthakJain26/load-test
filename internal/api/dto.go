@@ -18,7 +18,7 @@ type CreateLoadTestRequest struct {
 	EnvID              string         `json:"envId,omitempty"`
 	LocustClusterID    string         `json:"locustClusterId" binding:"required"`
 	TargetURL          string         `json:"targetUrl" binding:"required"`
-	Locustfile         string         `json:"locustfile" binding:"required"`
+	ScriptContent      string         `json:"scriptContent" binding:"required"` // Base64 encoded Python script
 	ScenarioID         string         `json:"scenarioId,omitempty"`
 	DefaultUsers       int            `json:"defaultUsers,omitempty"`
 	DefaultSpawnRate   float64        `json:"defaultSpawnRate,omitempty"`
@@ -34,7 +34,6 @@ type UpdateLoadTestRequest struct {
 	Description        string         `json:"description,omitempty"`
 	Tags               []string       `json:"tags,omitempty"`
 	TargetURL          string         `json:"targetUrl,omitempty"`
-	Locustfile         string         `json:"locustfile,omitempty"`
 	ScenarioID         string         `json:"scenarioId,omitempty"`
 	DefaultUsers       int            `json:"defaultUsers,omitempty"`
 	DefaultSpawnRate   float64        `json:"defaultSpawnRate,omitempty"`
@@ -42,6 +41,13 @@ type UpdateLoadTestRequest struct {
 	MaxDurationSec     *int           `json:"maxDurationSec,omitempty"`
 	UpdatedBy          string         `json:"updatedBy" binding:"required"`
 	Metadata           map[string]any `json:"metadata,omitempty"`
+}
+
+// UpdateScriptRequest represents the request body for updating a load test script (creates new revision)
+type UpdateScriptRequest struct {
+	ScriptContent string `json:"scriptContent" binding:"required"` // Base64 encoded Python script
+	Description   string `json:"description,omitempty"`            // Optional change description
+	UpdatedBy     string `json:"updatedBy" binding:"required"`
 }
 
 // LoadTestResponse represents the response body for a load test
@@ -56,7 +62,7 @@ type LoadTestResponse struct {
 	EnvID              string         `json:"envId,omitempty"`
 	LocustClusterID    string         `json:"locustClusterId"`
 	TargetURL          string         `json:"targetUrl"`
-	Locustfile         string         `json:"locustfile"`
+	LatestRevisionID   string         `json:"latestRevisionId,omitempty"`
 	ScenarioID         string         `json:"scenarioId,omitempty"`
 	DefaultUsers       int            `json:"defaultUsers,omitempty"`
 	DefaultSpawnRate   float64        `json:"defaultSpawnRate,omitempty"`
@@ -67,6 +73,17 @@ type LoadTestResponse struct {
 	UpdatedAt          string         `json:"updatedAt"`
 	UpdatedBy          string         `json:"updatedBy"`
 	Metadata           map[string]any `json:"metadata,omitempty"`
+}
+
+// ScriptRevisionResponse represents the response body for a script revision
+type ScriptRevisionResponse struct {
+	ID             string `json:"id"`
+	LoadTestID     string `json:"loadTestId"`
+	RevisionNumber int    `json:"revisionNumber"`
+	ScriptContent  string `json:"scriptContent"` // Base64 encoded Python script
+	Description    string `json:"description,omitempty"`
+	CreatedAt      string `json:"createdAt"`
+	CreatedBy      string `json:"createdBy"`
 }
 
 // LoadTestRun DTOs
@@ -146,6 +163,7 @@ type LocustCallbackTestStopRequest struct {
 	TenantID     string                  `json:"tenantId"`
 	EnvID        string                  `json:"envId"`
 	FinalMetrics *MetricSnapshotResponse `json:"finalMetrics,omitempty"`
+	AutoStopped  bool                    `json:"autoStopped"` // True if stopped by duration, false if manual
 }
 
 // LocustCallbackMetricsRequest represents the callback payload for periodic metrics
@@ -199,7 +217,7 @@ func toLoadTestResponse(test *domain.LoadTest) *LoadTestResponse {
 		EnvID:              test.EnvID,
 		LocustClusterID:    test.LocustClusterID,
 		TargetURL:          test.TargetURL,
-		Locustfile:         test.Locustfile,
+		LatestRevisionID:   test.LatestRevisionID,
 		ScenarioID:         test.ScenarioID,
 		DefaultUsers:       test.DefaultUsers,
 		DefaultSpawnRate:   test.DefaultSpawnRate,
@@ -210,6 +228,20 @@ func toLoadTestResponse(test *domain.LoadTest) *LoadTestResponse {
 		UpdatedAt:          time.UnixMilli(test.UpdatedAt).Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedBy:          test.UpdatedBy,
 		Metadata:           test.Metadata,
+	}
+}
+
+// ScriptRevision conversions
+
+func toScriptRevisionResponse(revision *domain.ScriptRevision) *ScriptRevisionResponse {
+	return &ScriptRevisionResponse{
+		ID:             revision.ID,
+		LoadTestID:     revision.LoadTestID,
+		RevisionNumber: revision.RevisionNumber,
+		ScriptContent:  revision.ScriptContent,
+		Description:    revision.Description,
+		CreatedAt:      time.UnixMilli(revision.CreatedAt).Format("2006-01-02T15:04:05Z07:00"),
+		CreatedBy:      revision.CreatedBy,
 	}
 }
 

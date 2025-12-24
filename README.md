@@ -1,6 +1,6 @@
 # Load Manager - Control Plane for Locust Load Testing
 
-A Go-based control plane that orchestrates Locust load testing clusters with full metrics integration and lifecycle management.
+A Go-based control plane that orchestrates Locust load testing clusters with MongoDB persistence, script versioning, real-time metrics, and comprehensive API documentation via Swagger.
 
 ## Architecture
 
@@ -8,29 +8,32 @@ A Go-based control plane that orchestrates Locust load testing clusters with ful
 ┌─────────────────┐
 │   User/CI/CD    │
 └────────┬────────┘
-         │ REST API
+         │ REST API (Create/Stop Tests)
          ▼
-┌─────────────────────────────────────────┐
-│     Go Control Plane (This Service)     │
-│  ┌──────────┐  ┌──────────┐  ┌────────┐│
-│  │   API    │  │Orchestr- │  │ Store  ││
-│  │ Handlers │◄─┤  ator    │◄─┤(Memory)││
-│  └────┬─────┘  └────┬─────┘  └────────┘│
-│       │             │                    │
-└───────┼─────────────┼────────────────────┘
-        │             │
-        │             ├───► Poll Metrics
+┌──────────────────────────────────────────────┐
+│      Go Control Plane (This Service)         │
+│  ┌──────────┐  ┌──────────┐  ┌────────────┐ │
+│  │   API    │  │Orchestr- │  │  MongoDB   │ │
+│  │ Handlers │◄─┤  ator    │◄─┤   Store    │ │
+│  │ +Swagger │  └────┬─────┘  └────────────┘ │
+│  └────┬─────┘       │                        │
+│       │      Start  │                        │
+│       │      Test ──┤                        │
+└───────┼─────────────┼────────────────────────┘
         │             │
         │             ▼
-┌───────▼──────────────────────────────────┐
-│        Locust Master + Workers           │
-│   ┌───────────┐     ┌──────────────┐    │
-│   │  Master   │────►│   Workers    │    │
-│   │  (Web UI) │     │  (Load Gen)  │    │
-│   └─────┬─────┘     └──────────────┘    │
-│         │ Callbacks (test_start/stop)    │
-│         └───────────────────────────────►│
-└──────────────────────┬───────────────────┘
+┌───────▼──────────────────────────────────────┐
+│         Locust Master + Workers              │
+│   ┌───────────┐     ┌──────────────┐        │
+│   │  Master   │────►│   Workers    │        │
+│   │  (Web UI) │     │  (Load Gen)  │        │
+│   └─────┬─────┘     └──────────────┘        │
+│         │                                    │
+│         │ Push Metrics (every 10s)           │
+│         │ Callbacks (test_start/stop)        │
+│         │ Duration Monitor (auto-stop)       │
+│         └───────────────────────────────────►│
+└──────────────────────┬───────────────────────┘
                        │ HTTP Load
                        ▼
               ┌─────────────────┐
@@ -40,13 +43,16 @@ A Go-based control plane that orchestrates Locust load testing clusters with ful
 
 ## Features
 
-- **Multi-tenant support**: Manage load tests across multiple tenants and environments
-- **Locust orchestration**: Start/stop tests via REST API without direct Locust access
-- **Real-time metrics**: Automatic polling and callback-based metrics collection
-- **Duration control**: Auto-stop tests after specified duration
-- **Persistent tracking**: Track test runs with status, metrics, and metadata
-- **Event hooks**: Locust integration via Python event listeners
-- **Clean separation**: Control plane never runs on target systems
+- **Multi-tenant Support**: Manage load tests across multiple accounts, orgs, projects, and environments
+- **Script Version Control**: Full revision tracking for test scripts with base64 storage and audit trail
+- **MongoDB Persistence**: Scalable storage for load tests, runs, metrics, and script revisions
+- **Locust Orchestration**: Start/stop tests via REST API without direct Locust access
+- **Push-based Metrics**: Locust pushes real-time metrics to control plane (no polling overhead)
+- **Visualization APIs**: Dashboard-optimized endpoints for charts, graphs, and real-time monitoring
+- **Swagger/OpenAPI Documentation**: Interactive API documentation at `/swagger/index.html`
+- **Duration Control**: Locust auto-stops tests after specified duration
+- **Event Hooks**: Locust integration via Python event listeners
+- **Clean Separation**: Control plane never runs on target systems
 
 ## Project Structure
 
@@ -54,28 +60,42 @@ A Go-based control plane that orchestrates Locust load testing clusters with ful
 Load-manager-cli/
 ├── cmd/
 │   └── controlplane/
-│       └── main.go              # Application entry point
+│       └── main.go                      # Application entry point
 ├── internal/
 │   ├── api/
-│   │   ├── dto.go              # Request/response DTOs
-│   │   └── handlers.go         # HTTP handlers
+│   │   ├── dto.go                      # Request/response DTOs
+│   │   ├── handlers.go                 # Core HTTP handlers
+│   │   ├── loadtest_handlers.go        # LoadTest CRUD operations
+│   │   ├── script_handlers.go          # Script revision management
+│   │   ├── visualization_handlers.go   # Metrics & dashboard APIs
+│   │   └── visualization_dto.go        # Visualization DTOs
 │   ├── config/
-│   │   └── config.go           # Configuration management
+│   │   └── config.go                   # Configuration management
 │   ├── domain/
-│   │   └── models.go           # Domain models
+│   │   └── models.go                   # Domain models (LoadTest, Run, ScriptRevision)
 │   ├── locustclient/
-│   │   └── client.go           # Locust HTTP client
+│   │   └── client.go                   # Locust HTTP client
+│   ├── mongodb/
+│   │   └── client.go                   # MongoDB connection client
 │   ├── service/
-│   │   └── orchestrator.go    # Orchestration logic
+│   │   └── orchestrator.go            # Orchestration logic
 │   └── store/
-│       └── memory_store.go     # In-memory persistence
+│       ├── loadtest_store.go           # LoadTest MongoDB store
+│       ├── loadtest_run_store.go       # LoadTestRun MongoDB store
+│       ├── metrics_store.go            # Metrics time-series store
+│       ├── script_revision_store.go    # Script revision store
+│       └── memory_store.go             # In-memory store (dev/test)
+├── docs/
+│   ├── swagger.yaml                    # OpenAPI spec (YAML)
+│   ├── swagger.json                    # OpenAPI spec (JSON)
+│   └── docs.go                         # Generated Swagger docs
 ├── config/
-│   └── config.yaml             # Configuration file
+│   └── config.yaml                     # Configuration file
 ├── locust/
-│   ├── locustfile.py           # Locust tests with hooks
-│   ├── requirements.txt        # Python dependencies
-│   ├── Dockerfile              # Locust container
-│   └── docker-compose.yml      # Local Locust cluster setup
+│   ├── locustfile.py                   # Locust tests with hooks
+│   ├── requirements.txt                # Python dependencies
+│   ├── Dockerfile                      # Locust container
+│   └── docker-compose.yml              # Local Locust cluster setup
 └── README.md
 ```
 
@@ -83,9 +103,10 @@ Load-manager-cli/
 
 ### Prerequisites
 
-- Go 1.24+
+- Go 1.22+
+- MongoDB 4.4+
 - Python 3.11+ (for Locust)
-- Docker (optional, for containerized Locust)
+- Docker (optional, for containerized Locust and MongoDB)
 
 ### 1. Install Dependencies
 
@@ -95,23 +116,50 @@ Update Go dependencies:
 go mod tidy
 ```
 
-### 2. Configure the Control Plane
+### 2. Start MongoDB
+
+```bash
+# Using Docker
+docker run -d -p 27017:27017 --name mongodb mongo:latest
+
+# Or use existing MongoDB instance
+```
+
+### 3. Configure the Control Plane
 
 Edit `config/config.yaml`:
 
 ```yaml
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+mongodb:
+  uri: "mongodb://localhost:27017"
+  database: "loadmanager"
+  connectTimeoutSeconds: 10
+  maxPoolSize: 100
+
 security:
   locustCallbackToken: "my-secure-token"
   apiToken: "my-api-token"
 
+accounts:
+  - accountId: "acc123"
+    orgs:
+      - orgId: "org456"
+        projects:
+          - projectId: "proj789"
+            environments:
+              - envId: "dev"
+                locustClusterId: "local-dev"
+
 locustClusters:
   - id: "local-dev"
     baseUrl: "http://localhost:8089"
-    tenantId: "tenant-1"
-    envId: "dev"
 ```
 
-### 3. Run the Control Plane
+### 4. Run the Control Plane
 
 ```bash
 go run cmd/controlplane/main.go -config config/config.yaml
@@ -119,7 +167,7 @@ go run cmd/controlplane/main.go -config config/config.yaml
 
 The control plane will start on `http://localhost:8080`.
 
-### 4. Start Locust Cluster
+### 5. Start Locust Cluster
 
 #### Option A: Using Docker Compose
 
@@ -145,6 +193,8 @@ Start Locust master:
 export CONTROL_PLANE_URL=http://localhost:8080
 export CONTROL_PLANE_TOKEN=my-secure-token
 export RUN_ID=test-run-id
+export DURATION_SECONDS=300
+export METRICS_PUSH_INTERVAL=10
 export TENANT_ID=tenant-1
 export ENV_ID=dev
 
@@ -159,6 +209,14 @@ locust -f locustfile.py --worker --master-host localhost --master-port 5557
 
 ## API Usage
 
+### Interactive API Documentation
+
+Access Swagger UI for interactive API testing:
+
+```
+http://localhost:8080/swagger/index.html
+```
+
 ### Authentication
 
 All API requests require a Bearer token:
@@ -167,23 +225,56 @@ All API requests require a Bearer token:
 Authorization: Bearer my-api-token
 ```
 
-### Create and Start a Test
+### Create a Load Test with Script
 
 ```bash
-curl -X POST http://localhost:8080/v1/tests \
+# First, base64 encode your Python script
+SCRIPT_BASE64=$(base64 < locustfile.py)
+
+curl -X POST http://localhost:8080/v1/load-tests \
+  -H "Authorization: Bearer my-api-token" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"name\": \"API Performance Test\",
+    \"accountId\": \"acc123\",
+    \"orgId\": \"org456\",
+    \"projectId\": \"proj789\",
+    \"envId\": \"dev\",
+    \"locustClusterId\": \"local-dev\",
+    \"targetUrl\": \"https://api.example.com\",
+    \"scriptContent\": \"$SCRIPT_BASE64\",
+    \"defaultUsers\": 100,
+    \"defaultSpawnRate\": 10,
+    \"createdBy\": \"user@example.com\"
+  }"
+```
+
+Response:
+
+```json
+{
+  "id": "test-uuid-123",
+  "name": "API Performance Test",
+  "latestRevisionId": "rev-uuid-1",
+  "accountId": "acc123",
+  "orgId": "org456",
+  "projectId": "proj789",
+  "status": "Active",
+  "createdAt": "2025-12-23T12:00:00Z"
+}
+```
+
+### Start a Test Run
+
+```bash
+curl -X POST http://localhost:8080/v1/load-tests/test-uuid-123/runs \
   -H "Authorization: Bearer my-api-token" \
   -H "Content-Type: application/json" \
   -d '{
-    "tenantId": "tenant-1",
-    "envId": "dev",
-    "scenarioId": "load-test-scenario-1",
-    "targetUsers": 100,
-    "spawnRate": 10,
-    "durationSeconds": 300,
-    "metadata": {
-      "description": "Performance test for API v2",
-      "jiraTicket": "PERF-123"
-    }
+    "targetUsers": 200,
+    "spawnRate": 20,
+    "durationSeconds": 600,
+    "createdBy": "user@example.com"
   }'
 ```
 
@@ -191,67 +282,61 @@ Response:
 
 ```json
 {
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "tenantId": "tenant-1",
-  "envId": "dev",
-  "locustClusterId": "local-dev",
-  "scenarioId": "load-test-scenario-1",
-  "targetUsers": 100,
-  "spawnRate": 10,
-  "durationSeconds": 300,
+  "id": "run-uuid-456",
+  "loadTestId": "test-uuid-123",
+  "scriptRevisionId": "rev-uuid-1",
   "status": "Running",
-  "startedAt": "2024-12-10T12:00:00Z",
-  "metadata": {
-    "description": "Performance test for API v2",
-    "jiraTicket": "PERF-123"
-  }
+  "targetUsers": 200,
+  "spawnRate": 20,
+  "startedAt": "2025-12-23T12:05:00Z"
 }
 ```
 
-### Get Test Status and Metrics
+### Get Run Details with Metrics
 
 ```bash
-curl -X GET http://localhost:8080/v1/tests/550e8400-e29b-41d4-a716-446655440000 \
+curl -X GET http://localhost:8080/v1/runs/run-uuid-456 \
   -H "Authorization: Bearer my-api-token"
 ```
 
-Response includes current metrics:
-
-```json
-{
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "Running",
-  "lastMetrics": {
-    "timestamp": "2024-12-10T12:05:30Z",
-    "totalRps": 250.5,
-    "totalRequests": 75000,
-    "totalFailures": 150,
-    "errorRate": 0.2,
-    "avgResponseMs": 45.3,
-    "p50ResponseMs": 40.0,
-    "p95ResponseMs": 95.5,
-    "p99ResponseMs": 150.0,
-    "currentUsers": 100
-  }
-}
-```
-
-### Stop a Test
+### Get Real-time Dashboard Data
 
 ```bash
-curl -X POST http://localhost:8080/v1/tests/550e8400-e29b-41d4-a716-446655440000/stop \
-  -H "Authorization: Bearer my-api-token"
+# Summary metrics for dashboard cards
+curl http://localhost:8080/v1/runs/run-uuid-456/summary
+
+# Graph data for charts
+curl http://localhost:8080/v1/runs/run-uuid-456/graph
+
+# Request statistics
+curl http://localhost:8080/v1/runs/run-uuid-456/requests
 ```
 
-### List Tests
+### Update Script (Creates New Revision)
 
 ```bash
-# List all tests
-curl -X GET http://localhost:8080/v1/tests \
-  -H "Authorization: Bearer my-api-token"
+NEW_SCRIPT=$(base64 < locustfile_v2.py)
 
-# Filter by tenant and status
-curl -X GET "http://localhost:8080/v1/tests?tenantId=tenant-1&status=Running" \
+curl -X PUT http://localhost:8080/v1/load-tests/test-uuid-123/script \
+  -H "Authorization: Bearer my-api-token" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"scriptContent\": \"$NEW_SCRIPT\",
+    \"description\": \"Added new endpoints\",
+    \"updatedBy\": \"user@example.com\"
+  }"
+```
+
+### List Script Revision History
+
+```bash
+curl http://localhost:8080/v1/load-tests/test-uuid-123/script/revisions
+```
+
+### Stop a Running Test
+
+```bash
+curl -X POST http://localhost:8080/v1/runs/run-uuid-456/stop \
   -H "Authorization: Bearer my-api-token"
 ```
 
@@ -267,9 +352,10 @@ The `locustfile.py` includes event hooks that automatically integrate with the c
 
 ### Event Hooks
 
-1. **test_start**: Notifies control plane when test begins
+1. **test_start**: Notifies control plane when test begins, starts background tasks
 2. **test_stop**: Sends final metrics when test ends
-3. **Metrics pusher**: Background greenlet that sends metrics every 10 seconds
+3. **Metrics pusher**: Background greenlet that pushes metrics every 10 seconds to control plane
+4. **Duration monitor**: Background greenlet that auto-stops test after configured duration
 
 ### Environment Variables for Locust
 
@@ -278,9 +364,10 @@ The `locustfile.py` includes event hooks that automatically integrate with the c
 | `CONTROL_PLANE_URL` | Yes | Control plane base URL (e.g., `http://localhost:8080`) |
 | `CONTROL_PLANE_TOKEN` | Yes | Shared secret for authentication |
 | `RUN_ID` | Yes | Test run ID from control plane |
+| `DURATION_SECONDS` | No | Test duration - auto-stops after N seconds |
+| `METRICS_PUSH_INTERVAL` | No | Metrics push interval in seconds (default: 10) |
 | `TENANT_ID` | No | Tenant identifier |
 | `ENV_ID` | No | Environment identifier |
-| `METRICS_PUSH_INTERVAL` | No | Metrics push interval in seconds (default: 10) |
 
 ### Custom Load Test Scenarios
 
@@ -301,38 +388,48 @@ class MyAppUser(HttpUser):
 
 ## Configuration Reference
 
-### Server Configuration
+See `config/config.yaml` for full configuration options.
 
+### Key Configuration Sections
+
+**MongoDB:**
 ```yaml
-server:
-  host: "0.0.0.0"    # Listen address
-  port: 8080          # Listen port
+mongodb:
+  uri: "mongodb://localhost:27017"
+  database: "loadmanager"
+  connectTimeoutSeconds: 10
+  maxPoolSize: 100
 ```
 
-### Locust Cluster Configuration
+**Multi-tenant Hierarchy:**
+```yaml
+accounts:
+  - accountId: "acc123"
+    orgs:
+      - orgId: "org456"
+        projects:
+          - projectId: "proj789"
+            environments:
+              - envId: "dev"
+                locustClusterId: "cluster-1"
+              - envId: "prod"
+                locustClusterId: "cluster-2"
+```
 
+**Locust Clusters:**
 ```yaml
 locustClusters:
-  - id: "unique-cluster-id"
-    baseUrl: "http://locust-master:8089"  # Locust master URL
-    tenantId: "tenant-1"                   # Tenant identifier
-    envId: "dev"                           # Environment identifier
-    authToken: ""                          # Optional Locust auth token
+  - id: "cluster-1"
+    baseUrl: "http://locust-dev:8089"
+  - id: "cluster-2"
+    baseUrl: "http://locust-prod:8089"
 ```
 
-### Security Configuration
-
+**Security:**
 ```yaml
 security:
-  locustCallbackToken: "secret"  # Token for Locust→Control Plane callbacks
-  apiToken: "secret"             # Token for User→Control Plane API calls
-```
-
-### Orchestrator Configuration
-
-```yaml
-orchestrator:
-  metricsPollIntervalSeconds: 10  # How often to poll Locust for metrics
+  locustCallbackToken: "secret"  # Locust→Control Plane
+  apiToken: "secret"             # User→Control Plane
 ```
 
 ## Development
@@ -397,16 +494,27 @@ spec:
           name: control-plane-config
 ```
 
+## Documentation
+
+- **README.md** (this file) - Getting started guide
+- **SWAGGER_INTEGRATION.md** - API documentation guide
+- **SCRIPT_REVISION_GUIDE.md** - Script version control guide
+- **VISUALIZATION_API_GUIDE.md** - Dashboard API reference
+- **docs/MONGODB_SETUP.md** - MongoDB setup and indexes
+- **Swagger UI** - http://localhost:8080/swagger/index.html
+
 ## Roadmap
 
-- [ ] PostgreSQL persistence layer
+- [x] MongoDB persistence layer
+- [x] Script revision control
+- [x] Swagger/OpenAPI documentation
+- [x] Real-time visualization APIs
 - [ ] Real authentication (OAuth2/JWT)
 - [ ] Grafana dashboard integration
 - [ ] Scheduled test runs
-- [ ] Test result comparison
+- [ ] Test result comparison and trending
 - [ ] Slack/email notifications
 - [ ] Dynamic cluster scaling
-- [ ] Historical metrics storage
 
 ## License
 

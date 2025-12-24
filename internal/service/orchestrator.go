@@ -24,7 +24,6 @@ type Orchestrator struct {
 	mu               sync.RWMutex
 	ctx              context.Context
 	cancel           context.CancelFunc
-	pollInterval     time.Duration
 }
 
 // NewOrchestrator creates a new orchestrator instance
@@ -39,7 +38,6 @@ func NewOrchestrator(cfg *config.Config, loadTestStore store.LoadTestRepository,
 		clients:          make(map[string]locustclient.Client),
 		ctx:              ctx,
 		cancel:           cancel,
-		pollInterval:     time.Duration(cfg.Orchestrator.MetricsPollIntervalSeconds) * time.Second,
 	}
 
 	// Initialize Locust clients for each configured cluster
@@ -51,10 +49,9 @@ func NewOrchestrator(cfg *config.Config, loadTestStore store.LoadTestRepository,
 	return o
 }
 
-// Start begins the orchestrator background tasks (metrics polling, duration checks, etc.)
+// Start begins the orchestrator (no background tasks needed with push-based metrics)
 func (o *Orchestrator) Start() {
-	go o.runMetricsPoller()
-	log.Println("Orchestrator started")
+	log.Println("Orchestrator started (push-based metrics mode)")
 }
 
 // Stop gracefully shuts down the orchestrator
@@ -65,8 +62,8 @@ func (o *Orchestrator) Stop() {
 
 // CreateTestRun creates and starts a new load test run
 func (o *Orchestrator) CreateTestRun(req *CreateTestRunRequest) (*domain.LoadTestRun, error) {
-	log.Printf("[Orchestrator] Creating test run: account=%s, org=%s, project=%s, env=%s, users=%d, spawnRate=%.2f",
-		req.AccountID, req.OrgID, req.ProjectID, req.EnvID, req.TargetUsers, req.SpawnRate)
+	log.Printf("[Orchestrator] Starting test run %s: account=%s, org=%s, project=%s, env=%s, users=%d, spawnRate=%.2f",
+		req.LoadTestRunID, req.AccountID, req.OrgID, req.ProjectID, req.EnvID, req.TargetUsers, req.SpawnRate)
 	
 	// Validate account/org/project and environment
 	cluster, err := o.config.GetLocustCluster(req.AccountID, req.OrgID, req.ProjectID, req.EnvID)
@@ -77,30 +74,10 @@ func (o *Orchestrator) CreateTestRun(req *CreateTestRunRequest) (*domain.LoadTes
 	
 	log.Printf("[Orchestrator] Resolved cluster: id=%s, url=%s", cluster.ID, cluster.BaseURL)
 
-	// Create test run entity
-	nowMillis := time.Now().UnixMilli()
-	run := &domain.LoadTestRun{
-		ID:              uuid.New().String(),
-		LoadTestID:      req.LoadTestID,
-		Name:            req.Name,
-		AccountID:       req.AccountID,
-		OrgID:           req.OrgID,
-		ProjectID:       req.ProjectID,
-		EnvID:           req.EnvID,
-		TargetUsers:     req.TargetUsers,
-		SpawnRate:       req.SpawnRate,
-		DurationSeconds: req.DurationSeconds,
-		Status:          domain.LoadTestRunStatusPending,
-		CreatedAt:       nowMillis,
-		CreatedBy:       req.CreatedBy,
-		UpdatedAt:       nowMillis,
-		UpdatedBy:       req.CreatedBy,
-		Metadata:        req.Metadata,
-	}
-
-	// Store the test run
-	if err := o.loadTestRunStore.Create(run); err != nil {
-		return nil, fmt.Errorf("failed to store test run: %w", err)
+	// Get the existing test run (already created by the API handler)
+	run, err := o.loadTestRunStore.Get(req.LoadTestRunID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get test run: %w", err)
 	}
 
 	// Start the load test on Locust
@@ -111,10 +88,20 @@ func (o *Orchestrator) CreateTestRun(req *CreateTestRunRequest) (*domain.LoadTes
 		return nil, fmt.Errorf("failed to get Locust client: %w", err)
 	}
 
-	log.Printf("[Orchestrator] Calling Locust swarm API for test %s", run.ID)
+	log.Printf("[Orchestrator] Setting run context in Locust for test %s", run.ID)
 	
 	ctx, cancel := context.WithTimeout(o.ctx, 30*time.Second)
 	defer cancel()
+
+	// Set run context in Locust before starting the swarm
+	if err := client.SetRunContext(ctx, run.ID, run.AccountID, run.EnvID, run.DurationSeconds); err != nil {
+		log.Printf("[Orchestrator] Failed to set run context for test %s: %v", run.ID, err)
+		run.Status = domain.LoadTestRunStatusFailed
+		_ = o.loadTestRunStore.Update(run)
+		return nil, fmt.Errorf("failed to set run context in Locust: %w", err)
+	}
+
+	log.Printf("[Orchestrator] Calling Locust swarm API for test %s", run.ID)
 
 	if err := client.Swarm(ctx, req.TargetUsers, req.SpawnRate); err != nil {
 		log.Printf("[Orchestrator] Swarm failed for test %s: %v", run.ID, err)
@@ -133,6 +120,14 @@ func (o *Orchestrator) CreateTestRun(req *CreateTestRunRequest) (*domain.LoadTes
 
 	if err := o.loadTestRunStore.Update(run); err != nil {
 		return nil, fmt.Errorf("failed to update test run status: %w", err)
+	}
+
+	// Add to recent runs immediately when test starts
+	if run.LoadTestID != "" {
+		log.Printf("[Orchestrator] Adding test run to recent runs for LoadTest %s", run.LoadTestID)
+		if err := o.updateRecentRuns(run); err != nil {
+			log.Printf("Warning: failed to add to recent runs for LoadTest %s: %v", run.LoadTestID, err)
+		}
 	}
 
 	log.Printf("[Orchestrator] Started test run %s for account=%s, org=%s, project=%s, env=%s",
@@ -260,19 +255,34 @@ func (o *Orchestrator) ListTestRuns(filter *store.LoadTestRunFilter) ([]*domain.
 	return o.loadTestRunStore.List(filter)
 }
 
-// UpdateMetrics updates the metrics for a test run (called by Locust callbacks or poller)
+// UpdateMetrics updates the metrics for a test run (called by Locust push callbacks)
 func (o *Orchestrator) UpdateMetrics(runID string, metrics *domain.MetricSnapshot) error {
 	run, err := o.loadTestRunStore.Get(runID)
 	if err != nil {
 		return fmt.Errorf("failed to get test run: %w", err)
 	}
 
+	// Store metrics in time-series collection for historical analysis
+	if o.metricsStore != nil {
+		storeCtx, storeCancel := context.WithTimeout(o.ctx, 5*time.Second)
+		defer storeCancel()
+		
+		if err := o.metricsStore.StoreMetric(storeCtx, run.ID, run.AccountID, run.OrgID, run.ProjectID, run.EnvID, metrics); err != nil {
+			log.Printf("Warning: failed to store metrics in time-series for run %s: %v", run.ID, err)
+			// Don't fail the entire operation if time-series storage fails
+		}
+	}
+
+	// Update the run's latest metrics
 	run.LastMetrics = metrics
 	run.UpdatedAt = time.Now().UnixMilli()
 
 	if err := o.loadTestRunStore.Update(run); err != nil {
 		return fmt.Errorf("failed to update test run metrics: %w", err)
 	}
+
+	log.Printf("Updated metrics for run %s: RPS=%.2f, Requests=%d, Failures=%d, Users=%d",
+		run.ID, metrics.TotalRPS, metrics.TotalRequests, metrics.TotalFailures, metrics.CurrentUsers)
 
 	return nil
 }
@@ -301,30 +311,46 @@ func (o *Orchestrator) HandleTestStart(runID string) error {
 }
 
 // HandleTestStop handles test_stop callback from Locust
-func (o *Orchestrator) HandleTestStop(runID string, finalMetrics *domain.MetricSnapshot) error {
+func (o *Orchestrator) HandleTestStop(runID string, finalMetrics *domain.MetricSnapshot, autoStopped bool) error {
+	log.Printf("[Orchestrator] Handling test stop for runID: %s, autoStopped: %v", runID, autoStopped)
+	
 	run, err := o.loadTestRunStore.Get(runID)
 	if err != nil {
 		return fmt.Errorf("failed to get test run: %w", err)
 	}
 
+	// Set status based on how the test was stopped
+	var newStatus domain.LoadTestRunStatus
+	if autoStopped {
+		newStatus = domain.LoadTestRunStatusFinished // Auto-completed by duration
+	} else {
+		newStatus = domain.LoadTestRunStatusStopped // Manually stopped
+	}
+	
+	log.Printf("[Orchestrator] Current status: %s, changing to %s", run.Status, newStatus)
+	
 	nowMillis := time.Now().UnixMilli()
-	run.Status = domain.LoadTestRunStatusFinished
+	run.Status = newStatus
 	run.FinishedAt = nowMillis
 	run.UpdatedAt = nowMillis
 	run.LastMetrics = finalMetrics
 
+	log.Printf("[Orchestrator] Updating test run in database...")
 	if err := o.loadTestRunStore.Update(run); err != nil {
+		log.Printf("[Orchestrator] Failed to update test run: %v", err)
 		return fmt.Errorf("failed to update test run: %w", err)
 	}
+	log.Printf("[Orchestrator] Test run updated successfully in database")
 
 	// Update the LoadTest's recent runs if this run has a LoadTestID
 	if run.LoadTestID != "" {
+		log.Printf("[Orchestrator] Updating recent runs for LoadTest %s", run.LoadTestID)
 		if err := o.updateRecentRuns(run); err != nil {
 			log.Printf("Warning: failed to update recent runs for LoadTest %s: %v", run.LoadTestID, err)
 		}
 	}
 
-	log.Printf("Test run %s finished (via callback)", runID)
+	log.Printf("[Orchestrator] Test run %s finished (via callback), status set to: %s", runID, run.Status)
 	return nil
 }
 
@@ -350,8 +376,25 @@ func (o *Orchestrator) updateRecentRuns(run *domain.LoadTestRun) error {
 		CreatedBy:       run.CreatedBy,
 	}
 
-	// Add to the beginning of the array
-	loadTest.RecentRuns = append([]domain.RecentRun{recentRun}, loadTest.RecentRuns...)
+	// Check if this run already exists in recent runs
+	foundIndex := -1
+	for i, existingRun := range loadTest.RecentRuns {
+		if existingRun.ID == run.ID {
+			foundIndex = i
+			log.Printf("[Orchestrator] Found existing entry for run %s at index %d, updating status from %s to %s",
+				run.ID, i, existingRun.Status, run.Status)
+			break
+		}
+	}
+
+	if foundIndex >= 0 {
+		// Update existing entry
+		loadTest.RecentRuns[foundIndex] = recentRun
+	} else {
+		// Add new entry to the beginning of the array
+		log.Printf("[Orchestrator] Adding new entry for run %s with status %s", run.ID, run.Status)
+		loadTest.RecentRuns = append([]domain.RecentRun{recentRun}, loadTest.RecentRuns...)
+	}
 
 	// Keep only the 10 most recent runs
 	if len(loadTest.RecentRuns) > 10 {
@@ -365,95 +408,10 @@ func (o *Orchestrator) updateRecentRuns(run *domain.LoadTestRun) error {
 		return fmt.Errorf("failed to update load test: %w", err)
 	}
 
-	log.Printf("Updated recent runs for LoadTest %s, now tracking %d runs", loadTest.ID, len(loadTest.RecentRuns))
+	log.Printf("[Orchestrator] Updated recent runs for LoadTest %s, now tracking %d runs", loadTest.ID, len(loadTest.RecentRuns))
 	return nil
 }
 
-// runMetricsPoller periodically polls Locust clusters for metrics on active runs
-func (o *Orchestrator) runMetricsPoller() {
-	ticker := time.NewTicker(o.pollInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-o.ctx.Done():
-			return
-		case <-ticker.C:
-			o.pollMetrics()
-		}
-	}
-}
-
-// pollMetrics polls all active test runs for updated metrics
-func (o *Orchestrator) pollMetrics() {
-	// Get all running tests
-	status := domain.LoadTestRunStatusRunning
-	runs, err := o.loadTestRunStore.List(&store.LoadTestRunFilter{
-		Status: &status,
-	})
-	if err != nil {
-		log.Printf("Error listing active runs: %v", err)
-		return
-	}
-
-	for _, run := range runs {
-		// Check if duration has elapsed
-		if run.DurationSeconds != nil && run.StartedAt > 0 {
-			startedTime := time.UnixMilli(run.StartedAt)
-			elapsed := time.Since(startedTime)
-			duration := time.Duration(*run.DurationSeconds) * time.Second
-
-			if elapsed >= duration {
-				log.Printf("Test run %s has reached duration limit, stopping", run.ID)
-				if err := o.StopTestRun(run.ID); err != nil {
-					log.Printf("Error stopping test run %s: %v", run.ID, err)
-				}
-				continue
-			}
-		}
-
-		// Get cluster from config
-		cluster, err := o.config.GetLocustCluster(run.AccountID, run.OrgID, run.ProjectID, run.EnvID)
-		if err != nil {
-			log.Printf("Error getting cluster for account %s, org %s, project %s, env %s: %v", run.AccountID, run.OrgID, run.ProjectID, run.EnvID, err)
-			continue
-		}
-
-		// Poll metrics from Locust
-		client, err := o.getClient(cluster.ID)
-		if err != nil {
-			log.Printf("Error getting client for cluster %s: %v", cluster.ID, err)
-			continue
-		}
-
-		ctx, cancel := context.WithTimeout(o.ctx, 10*time.Second)
-		metrics, err := client.GetStats(ctx)
-		cancel()
-
-		if err != nil {
-			log.Printf("Error fetching stats for run %s: %v", run.ID, err)
-			continue
-		}
-
-		// Log metrics summary for debugging
-		log.Printf("Polled metrics for run %s: RPS=%.2f, Requests=%d, Failures=%d, Users=%d",
-			run.ID, metrics.TotalRPS, metrics.TotalRequests, metrics.TotalFailures, metrics.CurrentUsers)
-
-		// Store metrics in time-series collection
-		if o.metricsStore != nil {
-			storeCtx, storeCancel := context.WithTimeout(o.ctx, 5*time.Second)
-			if err := o.metricsStore.StoreMetric(storeCtx, run.ID, run.AccountID, run.OrgID, run.ProjectID, run.EnvID, metrics); err != nil {
-				log.Printf("Error storing metrics in time-series for run %s: %v", run.ID, err)
-			}
-			storeCancel()
-		}
-
-		// Update metrics
-		if err := o.UpdateMetrics(run.ID, metrics); err != nil {
-			log.Printf("Error updating metrics for run %s: %v", run.ID, err)
-		}
-	}
-}
 
 // getClient retrieves a Locust client for the given cluster ID
 func (o *Orchestrator) getClient(clusterID string) (locustclient.Client, error) {
@@ -470,16 +428,19 @@ func (o *Orchestrator) getClient(clusterID string) (locustclient.Client, error) 
 
 // CreateTestRunRequest represents a request to create and start a test run
 type CreateTestRunRequest struct {
-	LoadTestID      string         `json:"loadTestId"`
+	LoadTestRunID   string         `json:"loadTestRunId"`  // The run ID (already created)
+	LoadTestID      string         `json:"loadTestId,omitempty"`
 	Name            string         `json:"name,omitempty"`
 	AccountID       string         `json:"accountId"`
 	OrgID           string         `json:"orgId"`
 	ProjectID       string         `json:"projectId"`
 	EnvID           string         `json:"envId,omitempty"`
+	ScriptContent   string         `json:"scriptContent"`  // Base64 encoded Python script
+	TargetURL       string         `json:"targetUrl"`
 	TargetUsers     int            `json:"targetUsers"`
 	SpawnRate       float64        `json:"spawnRate"`
 	DurationSeconds *int           `json:"durationSeconds,omitempty"`
-	CreatedBy       string         `json:"createdBy"`
+	CreatedBy       string         `json:"createdBy,omitempty"`
 	Metadata        map[string]any `json:"metadata,omitempty"`
 }
 

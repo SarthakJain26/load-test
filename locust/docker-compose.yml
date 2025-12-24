@@ -17,6 +17,7 @@ services:
       - RUN_ID=test-run-id
       - TENANT_ID=tenant-1
       - ENV_ID=dev
+      - DURATION_SECONDS=300
       - METRICS_PUSH_INTERVAL=10
     command: >
       -f locustfile.py

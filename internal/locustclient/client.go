@@ -16,6 +16,7 @@ import (
 
 // Client is an interface for interacting with Locust master HTTP API
 type Client interface {
+	SetRunContext(ctx context.Context, runID, tenantID, envID string, durationSeconds *int) error
 	Swarm(ctx context.Context, users int, spawnRate float64) error
 	Stop(ctx context.Context) error
 	GetStats(ctx context.Context) (*domain.MetricSnapshot, error)
@@ -37,6 +38,58 @@ func NewHTTPClient(baseURL, authToken string) *HTTPClient {
 			Timeout: 30 * time.Second,
 		},
 	}
+}
+
+// SetRunContext sets the run context in Locust before starting a test
+// Calls the custom /controlplane/set-context endpoint
+func (c *HTTPClient) SetRunContext(ctx context.Context, runID, tenantID, envID string, durationSeconds *int) error {
+	endpoint := fmt.Sprintf("%s/controlplane/set-context", c.baseURL)
+	
+	log.Printf("[Locust Client] Setting run context: runID=%s, tenantID=%s, envID=%s, duration=%v",
+		runID, tenantID, envID, durationSeconds)
+	
+	payload := map[string]interface{}{
+		"runId":    runID,
+		"tenantId": tenantID,
+		"envId":    envID,
+	}
+	
+	if durationSeconds != nil {
+		payload["durationSeconds"] = *durationSeconds
+	}
+	
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal context payload: %w", err)
+	}
+	
+	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, strings.NewReader(string(jsonData)))
+	if err != nil {
+		return fmt.Errorf("failed to create set-context request: %w", err)
+	}
+	
+	req.Header.Set("Content-Type", "application/json")
+	
+	if c.authToken != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.authToken))
+	}
+	
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		log.Printf("[Locust Client] Set context request failed: %v", err)
+		return fmt.Errorf("failed to execute set-context request: %w", err)
+	}
+	defer resp.Body.Close()
+	
+	body, _ := io.ReadAll(resp.Body)
+	
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[Locust Client] Set context failed with status %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("set-context request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+	
+	log.Printf("[Locust Client] Run context set successfully. Response: %s", string(body))
+	return nil
 }
 
 // Swarm starts a load test with specified users and spawn rate

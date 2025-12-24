@@ -1,0 +1,1117 @@
+basePath: /v1
+definitions:
+  internal_api.AggregatedSummary:
+    properties:
+      avgP50Latency:
+        type: number
+      avgP95Latency:
+        type: number
+      avgP99Latency:
+        type: number
+      avgRps:
+        type: number
+      dataPoints:
+        type: integer
+      duration:
+        type: string
+      maxP95Latency:
+        type: number
+      maxRps:
+        type: number
+      minRps:
+        type: number
+      overallErrorRate:
+        type: number
+      totalFailures:
+        type: integer
+      totalRequests:
+        type: integer
+    type: object
+  internal_api.CreateLoadTestRequest:
+    properties:
+      accountId:
+        type: string
+      createdBy:
+        type: string
+      defaultDurationSec:
+        type: integer
+      defaultSpawnRate:
+        type: number
+      defaultUsers:
+        type: integer
+      description:
+        type: string
+      envId:
+        type: string
+      locustClusterId:
+        type: string
+      maxDurationSec:
+        type: integer
+      metadata:
+        additionalProperties: {}
+        type: object
+      name:
+        type: string
+      orgId:
+        type: string
+      projectId:
+        type: string
+      scenarioId:
+        type: string
+      scriptContent:
+        description: Base64 encoded Python script
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      targetUrl:
+        type: string
+    required:
+    - accountId
+    - createdBy
+    - locustClusterId
+    - name
+    - orgId
+    - projectId
+    - scriptContent
+    - targetUrl
+    type: object
+  internal_api.CreateLoadTestRunRequest:
+    properties:
+      createdBy:
+        type: string
+      durationSeconds:
+        description: Override from LoadTest
+        type: integer
+      loadTestId:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      name:
+        type: string
+      spawnRate:
+        description: Override from LoadTest
+        type: number
+      targetUsers:
+        description: Override from LoadTest
+        type: integer
+    required:
+    - createdBy
+    - loadTestId
+    type: object
+  internal_api.EndpointStatsResponse:
+    properties:
+      avgResponseTimeMs:
+        type: number
+      avgRps:
+        type: number
+      endpoint:
+        type: string
+      errorRate:
+        type: number
+      maxResponseTimeMs:
+        type: number
+      method:
+        type: string
+      minResponseTimeMs:
+        type: number
+      p50ResponseMs:
+        type: number
+      p95ResponseMs:
+        type: number
+      totalFailures:
+        type: integer
+      totalRequests:
+        type: integer
+    type: object
+  internal_api.ErrorResponse:
+    properties:
+      error:
+        type: string
+      message:
+        type: string
+    type: object
+  internal_api.GraphDataPoint:
+    properties:
+      avgResponseTime:
+        description: Average response time in seconds
+        type: number
+      errorsPerSec:
+        description: Errors per second
+        type: number
+      requestsPerSec:
+        description: RPS
+        type: number
+      timestamp:
+        description: Unix milliseconds
+        type: integer
+      users:
+        description: Current active users
+        type: integer
+    type: object
+  internal_api.LoadTestResponse:
+    properties:
+      accountId:
+        type: string
+      createdAt:
+        type: string
+      createdBy:
+        type: string
+      defaultDurationSec:
+        type: integer
+      defaultSpawnRate:
+        type: number
+      defaultUsers:
+        type: integer
+      description:
+        type: string
+      envId:
+        type: string
+      id:
+        type: string
+      latestRevisionId:
+        type: string
+      locustClusterId:
+        type: string
+      maxDurationSec:
+        type: integer
+      metadata:
+        additionalProperties: {}
+        type: object
+      name:
+        type: string
+      orgId:
+        type: string
+      projectId:
+        type: string
+      scenarioId:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      targetUrl:
+        type: string
+      updatedAt:
+        type: string
+      updatedBy:
+        type: string
+    type: object
+  internal_api.LoadTestRunResponse:
+    properties:
+      accountId:
+        type: string
+      createdAt:
+        type: string
+      createdBy:
+        type: string
+      durationSeconds:
+        type: integer
+      envId:
+        type: string
+      finishedAt:
+        type: string
+      id:
+        type: string
+      lastMetrics:
+        $ref: '#/definitions/internal_api.MetricSnapshotResponse'
+      loadTestId:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      name:
+        type: string
+      orgId:
+        type: string
+      projectId:
+        type: string
+      spawnRate:
+        type: number
+      startedAt:
+        type: string
+      status:
+        type: string
+      targetUsers:
+        type: integer
+      updatedAt:
+        type: string
+      updatedBy:
+        type: string
+    type: object
+  internal_api.MetricSnapshotResponse:
+    properties:
+      avgResponseMs:
+        type: number
+      currentUsers:
+        type: integer
+      errorRate:
+        type: number
+      p50ResponseMs:
+        type: number
+      p95ResponseMs:
+        type: number
+      p99ResponseMs:
+        type: number
+      requestStats:
+        additionalProperties:
+          $ref: '#/definitions/internal_api.ReqStatResponse'
+        type: object
+      timestamp:
+        type: string
+      totalFailures:
+        type: integer
+      totalRequests:
+        type: integer
+      totalRps:
+        type: number
+    type: object
+  internal_api.ReqStatResponse:
+    properties:
+      avgResponseTime:
+        type: number
+      maxResponseTime:
+        type: number
+      medianResponseTime:
+        type: number
+      method:
+        type: string
+      minResponseTime:
+        type: number
+      name:
+        type: string
+      numFailures:
+        type: integer
+      numRequests:
+        type: integer
+      requestsPerSec:
+        type: number
+    type: object
+  internal_api.RequestLogEntry:
+    properties:
+      requestType:
+        description: GET, POST, etc.
+        type: string
+      responseLength:
+        type: integer
+      responseTime:
+        description: In milliseconds
+        type: number
+      success:
+        type: boolean
+      timestamp:
+        description: Unix milliseconds
+        type: integer
+      url:
+        type: string
+    type: object
+  internal_api.RunGraphResponse:
+    properties:
+      dataPoints:
+        items:
+          $ref: '#/definitions/internal_api.GraphDataPoint'
+        type: array
+      runId:
+        type: string
+      runName:
+        type: string
+      startedAt:
+        type: string
+      status:
+        type: string
+    type: object
+  internal_api.RunSummaryResponse:
+    properties:
+      avgResponseTime:
+        description: In seconds
+        type: number
+      duration:
+        type: string
+      durationSeconds:
+        type: integer
+      errorRate:
+        description: Percentage
+        type: number
+      finishedAt:
+        type: string
+      requestsPerSec:
+        type: number
+      runId:
+        type: string
+      runName:
+        type: string
+      spawnRate:
+        type: number
+      startedAt:
+        type: string
+      status:
+        type: string
+      targetUsers:
+        description: Test configuration
+        type: integer
+      totalRequests:
+        type: integer
+    type: object
+  internal_api.ScatterDataPoint:
+    properties:
+      endpoint:
+        type: string
+      method:
+        type: string
+      responseTimeMs:
+        type: number
+      success:
+        type: boolean
+      timestamp:
+        type: string
+    type: object
+  internal_api.ScatterPlotResponse:
+    properties:
+      dataPoints:
+        items:
+          $ref: '#/definitions/internal_api.ScatterDataPoint'
+        type: array
+      endpoints:
+        items:
+          type: string
+        type: array
+      testRunId:
+        type: string
+    type: object
+  internal_api.ScriptRevisionResponse:
+    properties:
+      createdAt:
+        type: string
+      createdBy:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      loadTestId:
+        type: string
+      revisionNumber:
+        type: integer
+      scriptContent:
+        description: Base64 encoded Python script
+        type: string
+    type: object
+  internal_api.SuccessResponse:
+    properties:
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  internal_api.TimeseriesChartResponse:
+    properties:
+      dataPoints:
+        items:
+          $ref: '#/definitions/internal_api.TimeseriesDataPoint'
+        type: array
+      summary:
+        $ref: '#/definitions/internal_api.AggregatedSummary'
+      testRunId:
+        type: string
+    type: object
+  internal_api.TimeseriesDataPoint:
+    properties:
+      currentUsers:
+        type: integer
+      errorRate:
+        type: number
+      p50ResponseMs:
+        type: number
+      p95ResponseMs:
+        type: number
+      p99ResponseMs:
+        type: number
+      timestamp:
+        type: string
+      totalRps:
+        type: number
+    type: object
+  internal_api.UpdateLoadTestRequest:
+    properties:
+      defaultDurationSec:
+        type: integer
+      defaultSpawnRate:
+        type: number
+      defaultUsers:
+        type: integer
+      description:
+        type: string
+      maxDurationSec:
+        type: integer
+      metadata:
+        additionalProperties: {}
+        type: object
+      name:
+        type: string
+      scenarioId:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      targetUrl:
+        type: string
+      updatedBy:
+        type: string
+    required:
+    - updatedBy
+    type: object
+  internal_api.UpdateScriptRequest:
+    properties:
+      description:
+        description: Optional change description
+        type: string
+      scriptContent:
+        description: Base64 encoded Python script
+        type: string
+      updatedBy:
+        type: string
+    required:
+    - scriptContent
+    - updatedBy
+    type: object
+  internal_api.VisualizationSummaryResponse:
+    properties:
+      endpointStats:
+        items:
+          $ref: '#/definitions/internal_api.EndpointStatsResponse'
+        type: array
+      status:
+        type: string
+      summary:
+        $ref: '#/definitions/internal_api.AggregatedSummary'
+      testRunId:
+        type: string
+      timeseries:
+        items:
+          $ref: '#/definitions/internal_api.TimeseriesDataPoint'
+        type: array
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@loadmanager.io
+    name: API Support
+  description: |-
+    Load testing management platform for creating, executing, and monitoring distributed load tests with Locust.
+
+    ## Features
+    - **Load Test Management**: Create and manage load tests with script versioning
+    - **Script Revisions**: Full version control for test scripts with audit trail
+    - **Test Execution**: Start and monitor load test runs with real-time metrics
+    - **Visualization**: Real-time dashboards and historical metrics
+
+    ## Authentication
+    Currently, this API does not require authentication. Future versions will include API key or OAuth2 support.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  title: Load Manager API
+  version: "1.0"
+paths:
+  /load-tests:
+    get:
+      description: Returns a list of all load test configurations
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of load tests
+          schema:
+            items:
+              $ref: '#/definitions/internal_api.LoadTestResponse'
+            type: array
+        "500":
+          description: Failed to list load tests
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+      summary: List all load tests
+      tags:
+      - LoadTests
+    post:
+      consumes:
+      - application/json
+      description: Creates a new load test configuration with an initial script revision
+      parameters:
+      - description: Load test configuration with base64 encoded script
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.CreateLoadTestRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Load test created successfully
+          schema:
+            $ref: '#/definitions/internal_api.LoadTestResponse'
+        "400":
+          description: Invalid request body
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+        "500":
+          description: Failed to create load test
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+      summary: Create a new load test
+      tags:
+      - LoadTests
+  /load-tests/{id}:
+    delete:
+      description: Deletes a load test configuration and all its associated data
+      parameters:
+      - description: Load Test ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Load test deleted successfully
+          schema:
+            $ref: '#/definitions/internal_api.SuccessResponse'
+        "500":
+          description: Failed to delete load test
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+      summary: Delete a load test
+      tags:
+      - LoadTests
+    get:
+      description: Retrieves a specific load test configuration by its ID
+      parameters:
+      - description: Load Test ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Load test details
+          schema:
+            $ref: '#/definitions/internal_api.LoadTestResponse'
+        "404":
+          description: Load test not found
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+      summary: Get load test by ID
+      tags:
+      - LoadTests
+    put:
+      consumes:
+      - application/json
+      description: Updates an existing load test configuration (excluding script)
+      parameters:
+      - description: Load Test ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated load test configuration
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.UpdateLoadTestRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Load test updated successfully
+          schema:
+            $ref: '#/definitions/internal_api.LoadTestResponse'
+        "400":
+          description: Invalid request body
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+        "404":
+          description: Load test not found
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+        "500":
+          description: Failed to update load test
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+      summary: Update load test configuration
+      tags:
+      - LoadTests
+  /load-tests/{id}/runs:
+    post:
+      consumes:
+      - application/json
+      description: Creates and starts a new load test run using the latest script
+        revision
+      parameters:
+      - description: Load Test ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Test run configuration
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.CreateLoadTestRunRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Load test run started successfully
+          schema:
+            $ref: '#/definitions/internal_api.LoadTestRunResponse'
+        "400":
+          description: Invalid request or validation error
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+        "404":
+          description: Load test not found or no script available
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+        "500":
+          description: Failed to start load test run
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+      summary: Start a new load test run
+      tags:
+      - Runs
+  /load-tests/{id}/script:
+    get:
+      description: Returns the latest script revision for the load test
+      parameters:
+      - description: Load Test ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Latest script revision
+          schema:
+            $ref: '#/definitions/internal_api.ScriptRevisionResponse'
+        "404":
+          description: Script not found
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+      summary: Get latest script
+      tags:
+      - Scripts
+    put:
+      consumes:
+      - application/json
+      description: Creates a new script revision for the load test with base64 encoded
+        content
+      parameters:
+      - description: Load Test ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Script content (base64) and description
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api.UpdateScriptRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Script revision created successfully
+          schema:
+            $ref: '#/definitions/internal_api.ScriptRevisionResponse'
+        "400":
+          description: Invalid request body
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+        "404":
+          description: Load test not found
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+        "500":
+          description: Failed to create script revision
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+      summary: Update load test script
+      tags:
+      - Scripts
+  /load-tests/{id}/script/revisions:
+    get:
+      description: Returns all script revisions for a load test (most recent first)
+      parameters:
+      - description: Load Test ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - default: 10
+        description: Maximum number of revisions to return
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of script revisions
+          schema:
+            items:
+              $ref: '#/definitions/internal_api.ScriptRevisionResponse'
+            type: array
+        "500":
+          description: Failed to list script revisions
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+      summary: List script revision history
+      tags:
+      - Scripts
+  /load-tests/{id}/script/revisions/{revisionId}:
+    get:
+      description: Returns a specific script revision by its ID
+      parameters:
+      - description: Load Test ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Revision ID
+        in: path
+        name: revisionId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Script revision details
+          schema:
+            $ref: '#/definitions/internal_api.ScriptRevisionResponse'
+        "404":
+          description: Script revision not found
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+      summary: Get specific script revision
+      tags:
+      - Scripts
+  /runs:
+    get:
+      description: Returns a list of load test runs, optionally filtered by load test
+        ID or other criteria
+      parameters:
+      - description: Load Test ID (when using /load-tests/{id}/runs endpoint)
+        in: path
+        name: id
+        type: string
+      - description: Filter by account ID
+        in: query
+        name: accountId
+        type: string
+      - description: Filter by organization ID
+        in: query
+        name: orgId
+        type: string
+      - description: Filter by project ID
+        in: query
+        name: projectId
+        type: string
+      - description: Filter by status (Pending, Running, Finished, Failed, Stopped)
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of load test runs
+          schema:
+            items:
+              $ref: '#/definitions/internal_api.LoadTestRunResponse'
+            type: array
+        "500":
+          description: Failed to list load test runs
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+      summary: List load test runs
+      tags:
+      - Runs
+  /runs/{id}:
+    get:
+      description: Retrieves details and current status of a specific load test run
+      parameters:
+      - description: Load Test Run ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Load test run details
+          schema:
+            $ref: '#/definitions/internal_api.LoadTestRunResponse'
+        "404":
+          description: Load test run not found
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+      summary: Get load test run details
+      tags:
+      - Runs
+  /runs/{id}/graph:
+    get:
+      description: Returns minimal graph data optimized for dashboard charts (RPS
+        and response time over time)
+      parameters:
+      - description: Load Test Run ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Start time in RFC3339 format
+        in: query
+        name: from
+        type: string
+      - description: End time in RFC3339 format
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Graph data for visualization
+          schema:
+            $ref: '#/definitions/internal_api.RunGraphResponse'
+        "404":
+          description: Load test run not found
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+        "500":
+          description: Failed to fetch graph data
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+      summary: Get run graph data
+      tags:
+      - Visualization
+  /runs/{id}/metrics/aggregate:
+    get:
+      description: Returns aggregated statistics for overall performance analysis
+      parameters:
+      - description: Load Test Run ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Start time in RFC3339 format
+        in: query
+        name: from
+        type: string
+      - description: End time in RFC3339 format
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Aggregated statistics
+          schema:
+            $ref: '#/definitions/internal_api.VisualizationSummaryResponse'
+        "404":
+          description: Load test run not found
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+        "500":
+          description: Failed to fetch aggregated stats
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+      summary: Get aggregated statistics
+      tags:
+      - Visualization
+  /runs/{id}/metrics/scatter:
+    get:
+      description: Returns scatter plot data for response time distribution analysis
+      parameters:
+      - description: Load Test Run ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Start time in RFC3339 format
+        in: query
+        name: from
+        type: string
+      - description: End time in RFC3339 format
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Scatter plot data points
+          schema:
+            $ref: '#/definitions/internal_api.ScatterPlotResponse'
+        "404":
+          description: Load test run not found
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+        "500":
+          description: Failed to fetch scatter plot data
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+      summary: Get scatter plot data
+      tags:
+      - Visualization
+  /runs/{id}/metrics/timeseries:
+    get:
+      description: Returns comprehensive timeseries data for detailed charts and analysis
+      parameters:
+      - description: Load Test Run ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Start time in RFC3339 format
+        in: query
+        name: from
+        type: string
+      - description: End time in RFC3339 format
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Detailed timeseries metrics
+          schema:
+            $ref: '#/definitions/internal_api.TimeseriesChartResponse'
+        "404":
+          description: Load test run not found
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+        "500":
+          description: Failed to fetch timeseries data
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+      summary: Get detailed timeseries metrics
+      tags:
+      - Visualization
+  /runs/{id}/requests:
+    get:
+      description: Returns endpoint statistics in a log-like format showing performance
+        per endpoint
+      parameters:
+      - description: Load Test Run ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - default: 100
+        description: Maximum number of entries to return
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of request statistics per endpoint
+          schema:
+            items:
+              $ref: '#/definitions/internal_api.RequestLogEntry'
+            type: array
+        "404":
+          description: Load test run not found
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+        "500":
+          description: Failed to fetch request log
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+      summary: Get live request statistics
+      tags:
+      - Visualization
+  /runs/{id}/stop:
+    post:
+      description: Stops a currently running load test run
+      parameters:
+      - description: Load Test Run ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Load test run stopped successfully
+          schema:
+            $ref: '#/definitions/internal_api.SuccessResponse'
+        "404":
+          description: Load test run not found
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+        "500":
+          description: Failed to stop load test run
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+      summary: Stop a running load test
+      tags:
+      - Runs
+  /runs/{id}/summary:
+    get:
+      description: Returns the 4 key metrics for dashboard cards (total requests,
+        RPS, avg response time, error rate)
+      parameters:
+      - description: Load Test Run ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Summary metrics
+          schema:
+            $ref: '#/definitions/internal_api.RunSummaryResponse'
+        "404":
+          description: Load test run not found
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+        "500":
+          description: Failed to fetch summary
+          schema:
+            $ref: '#/definitions/internal_api.ErrorResponse'
+      summary: Get run summary metrics
+      tags:
+      - Visualization
+schemes:
+- http
+- https
+swagger: "2.0"
+tags:
+- description: Load test configuration and management
+  name: LoadTests
+- description: Script revision management with version control
+  name: Scripts
+- description: Load test run execution and monitoring
+  name: Runs
+- description: Real-time metrics and historical data visualization
+  name: Visualization

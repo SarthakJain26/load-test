@@ -17,7 +17,7 @@ const (
 
 // MetricsDocument represents a time-series metrics document
 type MetricsDocument struct {
-	Timestamp       int64                  `bson:"timestamp"` // Unix milliseconds
+	Timestamp       time.Time              `bson:"timestamp"` // BSON DateTime for time-series collection
 	LoadTestRunID   string                 `bson:"loadTestRunId"`
 	AccountID       string                 `bson:"accountId"`
 	OrgID           string                 `bson:"orgId"`
@@ -143,8 +143,11 @@ func (s *MongoMetricsStore) createIndexes() error {
 
 // StoreMetric stores a metric snapshot
 func (s *MongoMetricsStore) StoreMetric(ctx context.Context, loadTestRunID, accountID, orgID, projectID, envID string, metric *domain.MetricSnapshot) error {
+	// Convert Unix milliseconds to time.Time for MongoDB time-series collection
+	timestamp := time.UnixMilli(metric.Timestamp)
+	
 	doc := MetricsDocument{
-		Timestamp:     metric.Timestamp, // Already int64 Unix milliseconds
+		Timestamp:     timestamp,
 		LoadTestRunID: loadTestRunID,
 		AccountID:     accountID,
 		OrgID:         orgID,

@@ -24,7 +24,18 @@ func NewVisualizationHandler(loadTestRunStore *store.MongoLoadTestRunStore, metr
 	}
 }
 
-// GetTimeseriesChart returns time-series data for line charts
+// GetTimeseriesChart godoc
+// @Summary Get detailed timeseries metrics
+// @Description Returns comprehensive timeseries data for detailed charts and analysis
+// @Tags Visualization
+// @Produce json
+// @Param id path string true "Load Test Run ID"
+// @Param from query string false "Start time in RFC3339 format"
+// @Param to query string false "End time in RFC3339 format"
+// @Success 200 {object} TimeseriesChartResponse "Detailed timeseries metrics"
+// @Failure 404 {object} ErrorResponse "Load test run not found"
+// @Failure 500 {object} ErrorResponse "Failed to fetch timeseries data"
+// @Router /runs/{id}/metrics/timeseries [get]
 func (h *VisualizationHandler) GetTimeseriesChart(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	loadTestRunID := vars["id"]
@@ -62,7 +73,7 @@ func (h *VisualizationHandler) GetTimeseriesChart(w http.ResponseWriter, r *http
 	dataPoints := make([]TimeseriesDataPoint, len(metrics))
 	for i, m := range metrics {
 		dataPoints[i] = TimeseriesDataPoint{
-			Timestamp:     time.UnixMilli(m.Timestamp),
+			Timestamp:     m.Timestamp,
 			TotalRPS:      m.TotalRPS,
 			CurrentUsers:  m.CurrentUsers,
 			P50ResponseMs: m.P50ResponseMs,
@@ -102,7 +113,18 @@ func (h *VisualizationHandler) GetTimeseriesChart(w http.ResponseWriter, r *http
 	json.NewEncoder(w).Encode(response)
 }
 
-// GetScatterPlot returns scatter plot data (response time distribution)
+// GetScatterPlot godoc
+// @Summary Get scatter plot data
+// @Description Returns scatter plot data for response time distribution analysis
+// @Tags Visualization
+// @Produce json
+// @Param id path string true "Load Test Run ID"
+// @Param from query string false "Start time in RFC3339 format"
+// @Param to query string false "End time in RFC3339 format"
+// @Success 200 {object} ScatterPlotResponse "Scatter plot data points"
+// @Failure 404 {object} ErrorResponse "Load test run not found"
+// @Failure 500 {object} ErrorResponse "Failed to fetch scatter plot data"
+// @Router /runs/{id}/metrics/scatter [get]
 func (h *VisualizationHandler) GetScatterPlot(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	loadTestRunID := vars["id"]
@@ -132,7 +154,7 @@ func (h *VisualizationHandler) GetScatterPlot(w http.ResponseWriter, r *http.Req
 	for _, m := range metrics {
 		for _, stat := range m.RequestStats {
 			dataPoints = append(dataPoints, ScatterDataPoint{
-				Timestamp:      time.UnixMilli(m.Timestamp),
+				Timestamp:      m.Timestamp,
 				Endpoint:       stat.Name,
 				Method:         stat.Method,
 				ResponseTimeMs: stat.AvgResponseTimeMs,
@@ -158,7 +180,18 @@ func (h *VisualizationHandler) GetScatterPlot(w http.ResponseWriter, r *http.Req
 	json.NewEncoder(w).Encode(response)
 }
 
-// GetAggregatedStats returns aggregated statistics
+// GetAggregatedStats godoc
+// @Summary Get aggregated statistics
+// @Description Returns aggregated statistics for overall performance analysis
+// @Tags Visualization
+// @Produce json
+// @Param id path string true "Load Test Run ID"
+// @Param from query string false "Start time in RFC3339 format"
+// @Param to query string false "End time in RFC3339 format"
+// @Success 200 {object} VisualizationSummaryResponse "Aggregated statistics"
+// @Failure 404 {object} ErrorResponse "Load test run not found"
+// @Failure 500 {object} ErrorResponse "Failed to fetch aggregated stats"
+// @Router /runs/{id}/metrics/aggregate [get]
 func (h *VisualizationHandler) GetAggregatedStats(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	loadTestRunID := vars["id"]
@@ -186,7 +219,7 @@ func (h *VisualizationHandler) GetAggregatedStats(w http.ResponseWriter, r *http
 	timeseriesPoints := make([]TimeseriesDataPoint, len(metrics))
 	for i, m := range metrics {
 		timeseriesPoints[i] = TimeseriesDataPoint{
-			Timestamp:     time.UnixMilli(m.Timestamp),
+			Timestamp:     m.Timestamp,
 			TotalRPS:      m.TotalRPS,
 			CurrentUsers:  m.CurrentUsers,
 			P50ResponseMs: m.P50ResponseMs,
@@ -295,7 +328,18 @@ func calculateErrorRate(total, failures int64) float64 {
 	return (float64(failures) / float64(total)) * 100.0
 }
 
-// GetRunGraph returns minimal data for plotting the main graph (Users, RPS, Errors/sec)
+// GetRunGraph godoc
+// @Summary Get run graph data
+// @Description Returns minimal graph data optimized for dashboard charts (RPS and response time over time)
+// @Tags Visualization
+// @Produce json
+// @Param id path string true "Load Test Run ID"
+// @Param from query string false "Start time in RFC3339 format"
+// @Param to query string false "End time in RFC3339 format"
+// @Success 200 {object} RunGraphResponse "Graph data for visualization"
+// @Failure 404 {object} ErrorResponse "Load test run not found"
+// @Failure 500 {object} ErrorResponse "Failed to fetch graph data"
+// @Router /runs/{id}/graph [get]
 func (h *VisualizationHandler) GetRunGraph(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	runID := vars["id"]
@@ -337,7 +381,7 @@ func (h *VisualizationHandler) GetRunGraph(w http.ResponseWriter, r *http.Reques
 		avgResponseTimeSec := m.P50ResponseMs / 1000.0
 
 		dataPoints[i] = GraphDataPoint{
-			Timestamp:       m.Timestamp,
+			Timestamp:       m.Timestamp.UnixMilli(),
 			Users:           m.CurrentUsers,
 			RequestsPerSec:  m.TotalRPS,
 			ErrorsPerSec:    errorsPerSec,
@@ -363,7 +407,16 @@ func (h *VisualizationHandler) GetRunGraph(w http.ResponseWriter, r *http.Reques
 	json.NewEncoder(w).Encode(response)
 }
 
-// GetRunSummary returns the 4 key metrics for the summary cards
+// GetRunSummary godoc
+// @Summary Get run summary metrics
+// @Description Returns the 4 key metrics for dashboard cards (total requests, RPS, avg response time, error rate)
+// @Tags Visualization
+// @Produce json
+// @Param id path string true "Load Test Run ID"
+// @Success 200 {object} RunSummaryResponse "Summary metrics"
+// @Failure 404 {object} ErrorResponse "Load test run not found"
+// @Failure 500 {object} ErrorResponse "Failed to fetch summary"
+// @Router /runs/{id}/summary [get]
 func (h *VisualizationHandler) GetRunSummary(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	runID := vars["id"]
@@ -430,8 +483,17 @@ func (h *VisualizationHandler) GetRunSummary(w http.ResponseWriter, r *http.Requ
 	json.NewEncoder(w).Encode(response)
 }
 
-// GetLiveRequestLog returns recent endpoint statistics formatted like a request log
-// Note: This returns aggregated endpoint data, not individual requests (to avoid storing massive amounts of data)
+// GetLiveRequestLog godoc
+// @Summary Get live request statistics
+// @Description Returns endpoint statistics in a log-like format showing performance per endpoint
+// @Tags Visualization
+// @Produce json
+// @Param id path string true "Load Test Run ID"
+// @Param limit query int false "Maximum number of entries to return" default(100)
+// @Success 200 {array} RequestLogEntry "List of request statistics per endpoint"
+// @Failure 404 {object} ErrorResponse "Load test run not found"
+// @Failure 500 {object} ErrorResponse "Failed to fetch request log"
+// @Router /runs/{id}/requests [get]
 func (h *VisualizationHandler) GetLiveRequestLog(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	runID := vars["id"]
@@ -481,7 +543,7 @@ func (h *VisualizationHandler) GetLiveRequestLog(w http.ResponseWriter, r *http.
 			// Create a log entry for each endpoint stat
 			// Note: This is aggregated data, not individual requests
 			logEntries = append(logEntries, RequestLogEntry{
-				Timestamp:      m.Timestamp,
+				Timestamp:      m.Timestamp.UnixMilli(),
 				RequestType:    stat.Method,
 				ResponseTime:   stat.AvgResponseTimeMs,
 				URL:            stat.Name,

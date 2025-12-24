@@ -1,0 +1,34 @@
+# Control Plane Configuration for Testing load-testing-vm-1
+# Target: 10.128.0.81:8000 (Products API)
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+# Locust cluster configuration
+# Locust will run locally on Mac at localhost:8089
+locustClusters:
+  - id: "local-mac-cluster"
+    baseUrl: "http://localhost:8089"
+    accountId: "my-account"
+    orgId: "my-org"
+    projectId: "products-api"
+    envId: "vm-test"
+    authToken: ""  # Empty if Locust doesn't require auth
+
+# Security tokens
+security:
+  # Token that Locust uses to authenticate callbacks to control plane
+  # This MUST match the CONTROL_PLANE_TOKEN environment variable in Locust
+  locustCallbackToken: "secure-token-vm-test-2025"
+  
+  # API token for making requests to control plane
+  # Use this in Authorization: Bearer header
+  apiToken: "api-token-products-test-2025"
+
+# MongoDB configuration (running locally on Mac)
+mongodb:
+  uri: "mongodb://localhost:27017"
+  database: "load_testing"
+  connectTimeoutSeconds: 10
+  maxPoolSize: 100
