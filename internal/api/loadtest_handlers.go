@@ -1,8 +1,10 @@
 package api
 
 import (
+	"Load-manager-cli/internal/scriptprocessor"
 	"Load-manager-cli/internal/service"
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -34,24 +36,34 @@ func (h *Handler) CreateLoadTest(w http.ResponseWriter, r *http.Request) {
 
 	nowMillis := time.Now().UnixMilli()
 	testID := uuid.New().String()
-	
-	// Create initial script revision
+
+	// Automatically inject Harness plugin import into user script
+	log.Printf("[LoadTest] Injecting Harness plugin into script for test %s", testID)
+	enhancedScript, err := scriptprocessor.InjectHarnessPluginBase64(req.ScriptContent)
+	if err != nil {
+		log.Printf("[LoadTest] Failed to inject plugin: %v", err)
+		respondError(w, http.StatusBadRequest, "Failed to process script", err)
+		return
+	}
+	log.Printf("[LoadTest] Plugin injection successful for test %s", testID)
+
+	// Create initial script revision with enhanced script
 	revisionID := uuid.New().String()
 	revision := &domain.ScriptRevision{
 		ID:             revisionID,
 		LoadTestID:     testID,
 		RevisionNumber: 1,
-		ScriptContent:  req.ScriptContent,
+		ScriptContent:  enhancedScript, // Store enhanced script with plugin import
 		Description:    "Initial version",
 		CreatedAt:      nowMillis,
 		CreatedBy:      req.CreatedBy,
 	}
-	
+
 	if err := h.scriptRevisionStore.Create(revision); err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to create script revision", err)
 		return
 	}
-	
+
 	// Create load test with reference to the revision
 	test := &domain.LoadTest{
 		ID:                 testID,
@@ -88,11 +100,11 @@ func (h *Handler) CreateLoadTest(w http.ResponseWriter, r *http.Request) {
 
 // GetLoadTest godoc
 // @Summary Get load test by ID
-// @Description Retrieves a specific load test configuration by its ID
+// @Description Retrieves a specific load test configuration by its ID, including the user's original script (without plugin)
 // @Tags LoadTests
 // @Produce json
 // @Param id path string true "Load Test ID"
-// @Success 200 {object} LoadTestResponse "Load test details"
+// @Success 200 {object} LoadTestResponse "Load test details with script content"
 // @Failure 404 {object} ErrorResponse "Load test not found"
 // @Router /load-tests/{id} [get]
 func (h *Handler) GetLoadTest(w http.ResponseWriter, r *http.Request) {
@@ -105,14 +117,37 @@ func (h *Handler) GetLoadTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, toLoadTestResponse(test))
+	// Fetch the latest script revision and strip plugin import
+	var cleanScriptContent string
+	if test.LatestRevisionID != "" {
+		revision, err := h.scriptRevisionStore.Get(test.LatestRevisionID)
+		if err != nil {
+			log.Printf("[GetLoadTest] Failed to fetch script revision %s: %v", test.LatestRevisionID, err)
+		} else {
+			// Strip plugin import to return clean user script
+			cleanScript, err := scriptprocessor.StripHarnessPluginBase64(revision.ScriptContent)
+			if err != nil {
+				log.Printf("[GetLoadTest] Failed to strip plugin from script: %v", err)
+			} else {
+				cleanScriptContent = cleanScript
+			}
+		}
+	}
+
+	response := toLoadTestResponse(test)
+	response.ScriptContent = cleanScriptContent
+
+	respondJSON(w, http.StatusOK, response)
 }
 
 // ListLoadTests godoc
 // @Summary List all load tests
-// @Description Returns a list of all load test configurations
+// @Description Returns a list of all load test configurations with optional filtering and sorting
 // @Tags LoadTests
 // @Produce json
+// @Param name query string false "Filter by name (partial match)"
+// @Param sortBy query string false "Sort by field: createdAt or updatedAt" default(createdAt)
+// @Param sortOrder query string false "Sort order: asc or desc" default(desc)
 // @Success 200 {array} LoadTestResponse "List of load tests"
 // @Failure 500 {object} ErrorResponse "Failed to list load tests"
 // @Router /load-tests [get]
@@ -136,8 +171,25 @@ func (h *Handler) ListLoadTests(w http.ResponseWriter, r *http.Request) {
 		filter.EnvID = &envID
 	}
 
+	if name := query.Get("name"); name != "" {
+		filter.Name = &name
+	}
+
 	if tags := query["tags"]; len(tags) > 0 {
 		filter.Tags = tags
+	}
+
+	// Sorting parameters
+	if sortBy := query.Get("sortBy"); sortBy != "" {
+		filter.SortBy = sortBy
+	} else {
+		filter.SortBy = "createdAt" // Default
+	}
+
+	if sortOrder := query.Get("sortOrder"); sortOrder != "" {
+		filter.SortOrder = sortOrder
+	} else {
+		filter.SortOrder = "desc" // Default
 	}
 
 	tests, err := h.loadTestStore.List(filter)
@@ -360,7 +412,7 @@ func (h *Handler) CreateLoadTestRun(w http.ResponseWriter, r *http.Request) {
 		run.Status = domain.LoadTestRunStatusFailed
 		run.UpdatedAt = time.Now().UnixMilli()
 		h.loadTestRunStore.Update(run)
-		
+
 		respondError(w, http.StatusInternalServerError, "Failed to start load test", err)
 		return
 	}
@@ -395,11 +447,14 @@ func (h *Handler) GetLoadTestRun(w http.ResponseWriter, r *http.Request) {
 // @Description Returns a list of load test runs, optionally filtered by load test ID or other criteria
 // @Tags Runs
 // @Produce json
-// @Param id path string false "Load Test ID (when using /load-tests/{id}/runs endpoint)"
+// @Param id path string true "Load Test ID (when using /load-tests/{id}/runs endpoint)"
 // @Param accountId query string false "Filter by account ID"
 // @Param orgId query string false "Filter by organization ID"
 // @Param projectId query string false "Filter by project ID"
+// @Param name query string false "Filter by name (partial match)"
 // @Param status query string false "Filter by status (Pending, Running, Finished, Failed, Stopped)"
+// @Param sortBy query string false "Sort by field: createdAt or updatedAt" default(createdAt)
+// @Param sortOrder query string false "Sort order: asc or desc" default(desc)
 // @Success 200 {array} LoadTestRunResponse "List of load test runs"
 // @Failure 500 {object} ErrorResponse "Failed to list load test runs"
 // @Router /runs [get]
@@ -430,9 +485,26 @@ func (h *Handler) ListLoadTestRuns(w http.ResponseWriter, r *http.Request) {
 		filter.EnvID = &envID
 	}
 
+	if name := query.Get("name"); name != "" {
+		filter.Name = &name
+	}
+
 	if statusStr := query.Get("status"); statusStr != "" {
 		status := domain.LoadTestRunStatus(statusStr)
 		filter.Status = &status
+	}
+
+	// Sorting parameters
+	if sortBy := query.Get("sortBy"); sortBy != "" {
+		filter.SortBy = sortBy
+	} else {
+		filter.SortBy = "createdAt" // Default
+	}
+
+	if sortOrder := query.Get("sortOrder"); sortOrder != "" {
+		filter.SortOrder = sortOrder
+	} else {
+		filter.SortOrder = "desc" // Default
 	}
 
 	runs, err := h.loadTestRunStore.List(filter)

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"Load-manager-cli/internal/domain"
+	"Load-manager-cli/internal/scriptprocessor"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 )
@@ -53,14 +54,24 @@ func (h *Handler) UpdateScript(w http.ResponseWriter, r *http.Request) {
 		nextRevisionNumber = latestRevision.RevisionNumber + 1
 	}
 
-	// Create new revision
+	// Automatically inject Harness plugin import into user script
+	log.Printf("[Script] Injecting Harness plugin into script revision %d for test %s", nextRevisionNumber, testID)
+	enhancedScript, err := scriptprocessor.InjectHarnessPluginBase64(req.ScriptContent)
+	if err != nil {
+		log.Printf("[Script] Failed to inject plugin: %v", err)
+		respondError(w, http.StatusBadRequest, "Failed to process script", err)
+		return
+	}
+	log.Printf("[Script] Plugin injection successful for revision %d", nextRevisionNumber)
+
+	// Create new revision with enhanced script
 	nowMillis := time.Now().UnixMilli()
 	revisionID := uuid.New().String()
 	revision := &domain.ScriptRevision{
 		ID:             revisionID,
 		LoadTestID:     testID,
 		RevisionNumber: nextRevisionNumber,
-		ScriptContent:  req.ScriptContent,
+		ScriptContent:  enhancedScript, // Store enhanced script with plugin import
 		Description:    req.Description,
 		CreatedAt:      nowMillis,
 		CreatedBy:      req.UpdatedBy,
