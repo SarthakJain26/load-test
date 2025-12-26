@@ -21,7 +21,10 @@ type LoadTestFilter struct {
 	OrgID     *string
 	ProjectID *string
 	EnvID     *string
+	Name      *string  // Filter by name (partial match)
 	Tags      []string
+	SortBy    string   // Sort field: "createdAt" or "updatedAt"
+	SortOrder string   // Sort order: "asc" or "desc" (default: desc)
 	Limit     int
 }
 
@@ -41,7 +44,10 @@ type LoadTestRunFilter struct {
 	OrgID      *string
 	ProjectID  *string
 	EnvID      *string
+	Name       *string                   // Filter by name (partial match)
 	Status     *domain.LoadTestRunStatus
+	SortBy     string                    // Sort field: "createdAt" or "updatedAt"
+	SortOrder  string                    // Sort order: "asc" or "desc" (default: desc)
 	Limit      int
 }
 

@@ -52,27 +52,43 @@ type UpdateScriptRequest struct {
 
 // LoadTestResponse represents the response body for a load test
 type LoadTestResponse struct {
-	ID                 string         `json:"id"`
-	Name               string         `json:"name"`
-	Description        string         `json:"description,omitempty"`
-	Tags               []string       `json:"tags,omitempty"`
-	AccountID          string         `json:"accountId"`
-	OrgID              string         `json:"orgId"`
-	ProjectID          string         `json:"projectId"`
-	EnvID              string         `json:"envId,omitempty"`
-	LocustClusterID    string         `json:"locustClusterId"`
-	TargetURL          string         `json:"targetUrl"`
-	LatestRevisionID   string         `json:"latestRevisionId,omitempty"`
-	ScenarioID         string         `json:"scenarioId,omitempty"`
-	DefaultUsers       int            `json:"defaultUsers,omitempty"`
-	DefaultSpawnRate   float64        `json:"defaultSpawnRate,omitempty"`
-	DefaultDurationSec *int           `json:"defaultDurationSec,omitempty"`
-	MaxDurationSec     *int           `json:"maxDurationSec,omitempty"`
-	CreatedAt          string         `json:"createdAt"`
-	CreatedBy          string         `json:"createdBy"`
-	UpdatedAt          string         `json:"updatedAt"`
-	UpdatedBy          string         `json:"updatedBy"`
-	Metadata           map[string]any `json:"metadata,omitempty"`
+	ID                 string                `json:"id"`
+	Name               string                `json:"name"`
+	Description        string                `json:"description,omitempty"`
+	Tags               []string              `json:"tags,omitempty"`
+	AccountID          string                `json:"accountId"`
+	OrgID              string                `json:"orgId"`
+	ProjectID          string                `json:"projectId"`
+	EnvID              string                `json:"envId,omitempty"`
+	LocustClusterID    string                `json:"locustClusterId"`
+	TargetURL          string                `json:"targetUrl"`
+	ScriptContent      string                `json:"scriptContent,omitempty"`      // Base64 encoded user script (without plugin)
+	LatestRevisionID   string                `json:"latestRevisionId,omitempty"`
+	ScenarioID         string                `json:"scenarioId,omitempty"`
+	DefaultUsers       int                   `json:"defaultUsers,omitempty"`
+	DefaultSpawnRate   float64               `json:"defaultSpawnRate,omitempty"`
+	DefaultDurationSec *int                  `json:"defaultDurationSec,omitempty"`
+	MaxDurationSec     *int                  `json:"maxDurationSec,omitempty"`
+	RecentRuns         []RecentRunResponse   `json:"recentRuns,omitempty"`         // Recent test runs
+	CreatedAt          string                `json:"createdAt"`
+	CreatedBy          string                `json:"createdBy"`
+	UpdatedAt          string                `json:"updatedAt"`
+	UpdatedBy          string                `json:"updatedBy"`
+	Metadata           map[string]any        `json:"metadata,omitempty"`
+}
+
+// RecentRunResponse represents a summary of a recent test run
+type RecentRunResponse struct {
+	ID              string `json:"id"`
+	Name            string `json:"name,omitempty"`
+	Status          string `json:"status"`
+	TargetUsers     int    `json:"targetUsers"`
+	SpawnRate       float64 `json:"spawnRate"`
+	DurationSeconds *int   `json:"durationSeconds,omitempty"`
+	StartedAt       string `json:"startedAt,omitempty"`
+	FinishedAt      string `json:"finishedAt,omitempty"`
+	CreatedAt       string `json:"createdAt"`
+	CreatedBy       string `json:"createdBy"`
 }
 
 // ScriptRevisionResponse represents the response body for a script revision
@@ -206,6 +222,26 @@ type SuccessResponse struct {
 // LoadTest conversions
 
 func toLoadTestResponse(test *domain.LoadTest) *LoadTestResponse {
+	// Convert recent runs
+	var recentRuns []RecentRunResponse
+	if len(test.RecentRuns) > 0 {
+		recentRuns = make([]RecentRunResponse, len(test.RecentRuns))
+		for i, run := range test.RecentRuns {
+			recentRuns[i] = RecentRunResponse{
+				ID:              run.ID,
+				Name:            run.Name,
+				Status:          string(run.Status),
+				TargetUsers:     run.TargetUsers,
+				SpawnRate:       run.SpawnRate,
+				DurationSeconds: run.DurationSeconds,
+				StartedAt:       formatTimestamp(run.StartedAt),
+				FinishedAt:      formatTimestamp(run.FinishedAt),
+				CreatedAt:       time.UnixMilli(run.CreatedAt).Format("2006-01-02T15:04:05Z07:00"),
+				CreatedBy:       run.CreatedBy,
+			}
+		}
+	}
+	
 	return &LoadTestResponse{
 		ID:                 test.ID,
 		Name:               test.Name,
@@ -223,12 +259,21 @@ func toLoadTestResponse(test *domain.LoadTest) *LoadTestResponse {
 		DefaultSpawnRate:   test.DefaultSpawnRate,
 		DefaultDurationSec: test.DefaultDurationSec,
 		MaxDurationSec:     test.MaxDurationSec,
+		RecentRuns:         recentRuns,
 		CreatedAt:          time.UnixMilli(test.CreatedAt).Format("2006-01-02T15:04:05Z07:00"),
 		CreatedBy:          test.CreatedBy,
 		UpdatedAt:          time.UnixMilli(test.UpdatedAt).Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedBy:          test.UpdatedBy,
 		Metadata:           test.Metadata,
 	}
+}
+
+// formatTimestamp formats a Unix milliseconds timestamp to ISO string, returns empty for 0
+func formatTimestamp(ts int64) string {
+	if ts == 0 {
+		return ""
+	}
+	return time.UnixMilli(ts).Format("2006-01-02T15:04:05Z07:00")
 }
 
 // ScriptRevision conversions
@@ -325,7 +370,21 @@ func toDomainMetricSnapshot(resp *MetricSnapshotResponse) *domain.MetricSnapshot
 		return nil
 	}
 	
+	// Parse timestamp string to Unix milliseconds
+	var timestampMs int64
+	if resp.Timestamp != "" {
+		if t, err := time.Parse(time.RFC3339, resp.Timestamp); err == nil {
+			timestampMs = t.UnixMilli()
+		} else {
+			// Fallback to current time if parsing fails
+			timestampMs = time.Now().UnixMilli()
+		}
+	} else {
+		timestampMs = time.Now().UnixMilli()
+	}
+	
 	metrics := &domain.MetricSnapshot{
+		Timestamp:         timestampMs,
 		TotalRPS:          resp.TotalRPS,
 		TotalRequests:     resp.TotalRequests,
 		TotalFailures:     resp.TotalFailures,

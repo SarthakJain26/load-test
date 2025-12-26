@@ -171,12 +171,29 @@ func (s *MongoLoadTestStore) List(filter *LoadTestFilter) ([]*domain.LoadTest, e
 		if filter.EnvID != nil {
 			query["envId"] = *filter.EnvID
 		}
+		if filter.Name != nil {
+			// Case-insensitive partial match
+			query["name"] = bson.M{"$regex": *filter.Name, "$options": "i"}
+		}
 		if len(filter.Tags) > 0 {
 			query["tags"] = bson.M{"$in": filter.Tags}
 		}
 	}
 	
-	opts := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
+	// Dynamic sorting
+	sortField := "createdAt"
+	sortOrder := -1 // desc by default
+	
+	if filter != nil {
+		if filter.SortBy == "updatedAt" {
+			sortField = "updatedAt"
+		}
+		if filter.SortOrder == "asc" {
+			sortOrder = 1
+		}
+	}
+	
+	opts := options.Find().SetSort(bson.D{{Key: sortField, Value: sortOrder}})
 	if filter != nil && filter.Limit > 0 {
 		opts.SetLimit(int64(filter.Limit))
 	}
@@ -341,12 +358,29 @@ func (s *MongoLoadTestRunStore) List(filter *LoadTestRunFilter) ([]*domain.LoadT
 		if filter.EnvID != nil {
 			query["envId"] = *filter.EnvID
 		}
+		if filter.Name != nil {
+			// Case-insensitive partial match
+			query["name"] = bson.M{"$regex": *filter.Name, "$options": "i"}
+		}
 		if filter.Status != nil {
 			query["status"] = *filter.Status
 		}
 	}
 	
-	opts := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
+	// Dynamic sorting
+	sortField := "createdAt"
+	sortOrder := -1 // desc by default
+	
+	if filter != nil {
+		if filter.SortBy == "updatedAt" {
+			sortField = "updatedAt"
+		}
+		if filter.SortOrder == "asc" {
+			sortOrder = 1
+		}
+	}
+	
+	opts := options.Find().SetSort(bson.D{{Key: sortField, Value: sortOrder}})
 	if filter != nil && filter.Limit > 0 {
 		opts.SetLimit(int64(filter.Limit))
 	}
